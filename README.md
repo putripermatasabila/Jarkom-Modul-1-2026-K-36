@@ -1,160 +1,176 @@
-# LAPORAN RESMI PRAKTIKUM JARINGAN KOMPUTER
+# Jarkom-Modul-1-2026-K-36
 
-## Modul: The Wired — Konfigurasi Jaringan, Layanan, dan Forensik Paket
+**Kelompok** : K-36
 
-**Kelompok** : K-36 <br>
 **Anggota** :
 
-- Nazwa Aulia Dwi Purnomo — 5027251118
-- Putri Permata Sabila — 5027251047
-
-## Topologi Jaringan
-
-Router Lain memiliki 4 interface: eth0 terhubung ke cloud NAT1 (internet publik), eth1 ke Switch1 (Alice dan Mika), eth2 ke Switch2 (Chisa), dan eth3 ke Switch3 (Knights dan Eiri). Skema IP yang dipakai kelompok K-36:
-
-| Node    | Interface | IP Address       | Gateway     |
-| ------- | --------- | ---------------- | ----------- |
-| Lain    | eth0      | DHCP (dari NAT1) | -           |
-| Lain    | eth1      | 172.16.36.1/24   | -           |
-| Lain    | eth2      | 172.16.37.1/24   | -           |
-| Lain    | eth3      | 172.16.38.1/24   | -           |
-| Alice   | eth0      | 172.16.36.10/24  | 172.16.36.1 |
-| Mika    | eth0      | 172.16.36.20/24  | 172.16.36.1 |
-| Chisa   | eth0      | 172.16.37.10/24  | 172.16.37.1 |
-| Knights | eth0      | 172.16.38.10/24  | 172.16.38.1 |
-| Eiri    | eth0      | 172.16.38.20/24  | 172.16.38.1 |
-
----
+| Nama                    | NRP        |
+| ----------------------- | ---------- |
+| Nazwa Aulia Dwi Purnomo | 5027251118 |
+| Putri Permata Sabila    | 5027251047 |
 
 ## Laporan Resmi
 
 ### Soal 1
 
-Pada soal 1 kita diminta membangun topologi The Wired di GNS3: router Lain dengan tiga switch/gateway (Switch1 ke Alice & Mika, Switch2 ke Chisa, Switch3 ke Knights & Eiri), lalu menyambungkan router Lain ke internet publik lewat NAT/DHCP di eth0, dan memastikan semua entitas bisa saling komunikasi.
+Soal 1 minta router Lain bikin 3 Switch/Gateway: Switch 1 ke Alice & Mika, Switch 2 ke Chisa, Switch 3 ke Knights & Eiri, semua Entitas dikonfigurasi sebagai Client di GNS3 pakai prefix IP kelompok.
 
-#### A) Konfigurasi IP tiap interface di Router Lain
-
-```sh
-ip addr add 172.16.36.1/24 dev eth1
-ip addr add 172.16.37.1/24 dev eth2
-ip addr add 172.16.38.1/24 dev eth3
-dhclient eth0
-```
-
-`dhclient eth0` dipakai supaya eth0 dapat IP otomatis dari cloud NAT1 di GNS3, sedangkan eth1-eth3 di-set statis karena jadi gateway tiap subnet client.
-
-#### B) Mengaktifkan IP forwarding
+Router (Lain) — eth1, eth2, eth3 masing-masing jadi gateway satu switch:
 
 ```sh
-echo 1 > /proc/sys/net/ipv4/ip_forward
+auto eth1
+iface eth1 inet static
+address 192.229.1.1
+netmask 255.255.255.0
+
+auto eth2
+iface eth2 inet static
+address 192.229.2.1
+netmask 255.255.255.0
+
+auto eth3
+iface eth3 inet static
+address 192.229.3.1
+netmask 255.255.255.0
 ```
 
-Baris ini yang bikin Lain bisa meneruskan paket antar interface (jadi router beneran), bukan cuma endpoint. Tanpa ini, client di subnet berbeda gak akan bisa saling ping walau satu router yang sama.
-
-#### C) Konfigurasi IP dan gateway di tiap client
+Alice dan Mika (Switch 1):
 
 ```sh
-# Contoh di node Alice
-ip addr add 172.16.36.10/24 dev eth0
-ip route add default via 172.16.36.1
+# Alice
+auto eth0
+iface eth0 inet static
+address 192.229.1.2
+netmask 255.255.255.0
+gateway 192.229.1.1
+
+# Mika
+auto eth0
+iface eth0 inet static
+address 192.229.1.3
+netmask 255.255.255.0
+gateway 192.229.1.1
 ```
 
-Perintah yang sama disesuaikan IP-nya untuk Mika, Chisa, Knights, dan Eiri. Karena semua subnet langsung terhubung ke Lain (connected route), gak perlu static route tambahan, cukup pastikan tiap client set default gateway ke interface Lain yang sesuai.
+Chisa (Switch 2)
+
+```sh
+# Chisa
+auto eth0
+iface eth0 inet static
+address 192.229.2.2
+netmask 255.255.255.0
+gateway 192.229.2.1
+
+```
+
+Eiri dan Knights (Switch 3):
+
+```sh
+# Eiri
+auto eth0
+iface eth0 inet static
+address 192.229.3.2
+netmask 255.255.255.0
+gateway 192.229.3.1
+
+# Knights
+auto eth0
+iface eth0 inet static
+address 192.229.3.3
+netmask 255.255.255.0
+gateway 192.229.3.1
+
+```
 
 #### Output
 
-<!-- masukkan screenshot ip -br a dari router Lain dan hasil ping antar entitas -->
-
----
+## ![Topologi Jaringan](images/topologi.png)
 
 ### Soal 2
 
-Soal ini minta Lain dikonfigurasi NAT Masquerade dan DNS resolver supaya tiap client bisa internetan sendiri (ping 8.8.8.8 dan buka google.com), bukan cuma saling terhubung ke sesama client.
-
-#### A) NAT Masquerade
+Soal 2 minta router Lain konek ke internet publik lewat NAT/DHCP di interface eth0, soalnya The Wired awalnya masih terisolasi.
 
 ```sh
-iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-iptables -A FORWARD -i eth0 -o eth1 -m state --state RELATED,ESTABLISHED -j ACCEPT
-iptables -A FORWARD -i eth1 -o eth0 -j ACCEPT
-iptables -A FORWARD -i eth0 -o eth2 -m state --state RELATED,ESTABLISHED -j ACCEPT
-iptables -A FORWARD -i eth2 -o eth0 -j ACCEPT
-iptables -A FORWARD -i eth0 -o eth3 -m state --state RELATED,ESTABLISHED -j ACCEPT
-iptables -A FORWARD -i eth3 -o eth0 -j ACCEPT
+auto eth0
+iface eth0 inet dhcp
 ```
 
-MASQUERADE nge-translate source IP privat client jadi IP publik eth0 pas keluar ke internet, dan aturan FORWARD di atas cuma ngizinin trafik yang memang berasal dari inisiasi client (state RELATED,ESTABLISHED) buat masuk balik.
-
-#### B) DNS Resolver
-
-```sh
-apt install dnsmasq -y
-```
-
-```conf
-# /etc/dnsmasq.conf
-interface=eth1
-interface=eth2
-interface=eth3
-server=8.8.8.8
-```
-
-```sh
-systemctl restart dnsmasq
-```
-
-Client cukup arahkan `/etc/resolv.conf` ke IP Lain di subnet masing-masing (misal `nameserver 172.16.36.1` di Alice/Mika), dnsmasq di Lain yang meneruskan query ke 8.8.8.8.
-
-#### Output
-
-<!-- masukkan screenshot ping 8.8.8.8 dan curl/browser buka google.com dari salah satu client -->
+eth0 dibiarin dapat IP otomatis dari DHCP jaringan luar, jadi router langsung punya akses internet tanpa perlu setting IP manual.
 
 ---
 
 ### Soal 3
 
-Eiri berusaha bikin kekacauan lewat restart mendadak, jadi soal ini minta konfigurasi jaringan tetap ada walau node di-restart, plus script verifikasi `/root/cek_status.sh`.
+Pada soal 3 seluruh Entitas di bawah Switch 1, 2, dan 3 harus bisa saling terhubung dan berkomunikasi lewat konfigurasi routing.
 
-#### A) Menyimpan konfigurasi IP secara permanen
-
-```conf
-# /etc/network/interfaces
-auto eth0
-iface eth0 inet dhcp
-
-auto eth1
-iface eth1 inet static
-    address 172.16.36.1
-    netmask 255.255.255.0
-
-auto eth2
-iface eth2 inet static
-    address 172.16.37.1
-    netmask 255.255.255.0
-
-auto eth3
-iface eth3 inet static
-    address 172.16.38.1
-    netmask 255.255.255.0
-```
-
-#### B) Menyimpan aturan iptables
+Karena router Lain terhubung langsung ke ketiga subnet lewat eth1, eth2, dan eth3, routing antar subnet sudah terbentuk otomatis dari routing table router tanpa perlu tambahan konfigurasi khusus. Pembuktiannya dilakukan dengan ping ke IP Address Entitas di subnet lain:
 
 ```sh
-apt install iptables-persistent -y
-netfilter-persistent save
+ping -c 2 <IP_tujuan>
 ```
 
-`iptables-persistent` bakal otomatis restore semua rule NAT/FORWARD dari `/etc/iptables/rules.v4` setiap boot, jadi gak perlu ngetik ulang manual.
+#### Output
 
-#### C) Script verifikasi `/root/cek_status.sh`
+![](images/ping-antar-subnet1.png)
+![](images/ping-antar-subnet2.png)
+![](images/ping-antar-subnet3.png)
+![](images/ping-antar-subnet4.png)
+
+---
+
+#### Soal 4
+
+Pada soal 4 tiap Entitas diminta mandiri akses internet, bisa ping ke 8.8.8.8 dan buka google.com, lewat konfigurasi firewall/iptables NAT Masquerade dan DNS resolver.
+
+Langkah pertama, buat file `router.sh` di router Lain yang isinya command NAT dan forwarding:
+
+```sh
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+iptables -A FORWARD -i eth1 -o eth0 -j ACCEPT
+iptables -A FORWARD -i eth2 -o eth0 -j ACCEPT
+iptables -A FORWARD -i eth3 -o eth0 -j ACCEPT
+```
+
+`MASQUERADE` dan `FORWARD` ini dua hal yang beda fungsi. `MASQUERADE` di tabel `nat` bertugas nge-rewrite source IP private client (192.229.x.x) jadi IP publik router pas paket keluar lewat eth0, supaya balasan dari internet bisa balik lagi ke router dan di-translate ulang ke client yang benar. Tanpa ini, client dengan IP private gak akan bisa langsung diajak komunikasi sama server di internet.
+
+`FORWARD` di sisi lain ngatur izin, boleh atau enggak sebuah paket lewat (diteruskan) dari satu interface ke interface lain di router. Default policy `FORWARD` di banyak sistem itu `ACCEPT`, makanya soal 3 tadi bisa langsung jalan tanpa rule tambahan. Tapi kalau default policy-nya `DROP`, paket dari client yang mau keluar ke eth0 (internet) bakal ketahan di router meskipun NAT-nya udah bener. Jadi tiga baris `ACCEPT` itu ditambahin buat mastiin secara eksplisit trafik dari eth1, eth2, dan eth3 menuju eth0 diizinkan lewat, jaga-jaga kalau default policy-nya ketat.
+
+Untuk DNS resolver, tiap client diset otomatis pas interface naik, contoh di Eiri:
+
+```sh
+auto eth0
+iface eth0 inet static
+address 192.229.3.3
+netmask 255.255.255.0
+gateway 192.229.3.1
+up echo "nameserver 8.8.8.8" > /etc/resolv.conf
+```
+
+`8.8.8.8` itu alamat Google Public DNS, dipakai supaya client bisa nerjemahin nama domain (google.com) jadi IP address. Tanpa ini client cuma bisa akses internet pakai IP langsung, gak bisa buka website lewat nama domainnya.
+
+Baris `up echo "nameserver 8.8.8.8" > /etc/resolv.conf` itu bagian dari `/etc/network/interfaces`, bukan file terpisah. `up` di sini artinya command yang dijalankan otomatis tiap kali interface eth0 naik. Isi command-nya sendiri nulis ke `/etc/resolv.conf`, file khusus yang nyimpen daftar DNS server yang dipakai sistem buat resolve domain (terpisah dari `/etc/network/interfaces` yang isinya konfigurasi IP address dan routing interface). Jadi gak perlu edit manual `/etc/resolv.conf` di terminal, cukup taruh baris `up echo ...` itu di dalam `/etc/network/interfaces` (edit pakai `nano /etc/network/interfaces` di terminal), dan tiap kali eth0 up, `/etc/resolv.conf` otomatis ke-generate ulang. Cara yang sama diterapin ke Alice, Mika, Chisa, dan Knights.
+
+#### Output
+
+![](images/ping-8.8.8.8.png)
+![](images/ping-google-alice.png.png)
+
+---
+
+### Soal 5
+
+Pada soal 5 diminta membuat script verifikasi `/root/cek_status.sh` di router Lain yang menampilkan ringkasan interface (`ip -br a`) dan status tabel NAT (`iptables -t nat -L -v -n`), buat antisipasi kalau node di-restart mendadak.
+
+```sh
+nano /root/cek_status.sh
+```
+
+Isi `cek_status.sh`:
 
 ```sh
 #!/bin/bash
-echo "=== Ringkasan Interface ==="
 ip -br a
-echo ""
-echo "=== Status NAT Table ==="
 iptables -t nat -L -v -n
 ```
 
@@ -162,218 +178,246 @@ iptables -t nat -L -v -n
 chmod +x /root/cek_status.sh
 ```
 
-Script ini tinggal dijalankan manual (`./cek_status.sh`) tiap habis reboot buat memastikan IP dan NAT masih sesuai konfigurasi awal.
+Script ini ditaruh di `init.sh` supaya otomatis jalan tiap kali router boot atau di-restart:
+
+```sh
+/root/router.sh
+/root/cek_status.sh
+```
+
+Jadi begitu router Lain nyala ulang, `router.sh` langsung nerapin ulang aturan NAT dan forwarding, sedangkan `cek_status.sh` langsung nampilin ringkasan interface dan status tabel NAT buat mastiin konfigurasinya masih sesuai, tanpa perlu ngecek manual satu-satu.
 
 #### Output
 
-<!-- masukkan screenshot hasil cek_status.sh setelah node di-restart -->
-
----
-
-### Soal 4
-
-Mika curiga ada anomali traffic, jadi kita jalankan traffic generator di node Mika lalu sniffing pakai Wireshark dengan filter khusus DNS dan ICMP.
-
-```sh
-# jalankan traffic generator yang disediakan soal
-python3 traffic_generator.py
-```
-
-Sambil traffic generator jalan, buka Wireshark di interface eth0 node Mika, lalu terapkan display filter:
-
-dns || icmp
-
-Filter ini nyaring dua jenis paket: query/response DNS (biasanya nunjukin domain apa aja yang diakses) dan paket ICMP (echo request/reply, bisa nunjukin ping mencurigakan/scanning).
-
-#### Output
-
-<!-- masukkan screenshot hasil filter Wireshark dan ringkasan jumlah paket DNS/ICMP yang lolos -->
-
----
-
-### Soal 5
-
-Chisa mendirikan FTP Server dengan shared folder `/var/wired/data`, dengan kebijakan alice full akses, mika read-only, dan eiri diblacklist total.
-
-#### A) Instalasi dan setup folder
-
-```sh
-apt install vsftpd -y
-mkdir -p /var/wired/data
-chmod 755 /var/wired/data
-```
-
-#### B) Konfigurasi dasar vsftpd
-
-```conf
-# /etc/vsftpd.conf
-local_enable=YES
-write_enable=YES
-chroot_local_user=YES
-local_root=/var/wired/data
-user_config_dir=/etc/vsftpd/user_conf
-userlist_enable=YES
-userlist_deny=YES
-userlist_file=/etc/vsftpd/blacklist
-```
-
-#### C) Kebijakan per user
-
-```sh
-useradd -M -d /var/wired/data alice
-useradd -M -d /var/wired/data mika
-useradd -M -d /var/wired/data eiri
-echo "alice:passalice" | chpasswd
-echo "mika:passmika" | chpasswd
-```
-
-```conf
-# /etc/vsftpd/user_conf/mika
-write_enable=NO
-```
-
-```sh
-# /etc/vsftpd/blacklist
-eiri
-```
-
-`user_config_dir` memungkinkan override konfigurasi global per user. Mika di-override `write_enable=NO` supaya cuma bisa read, sedangkan eiri langsung dimasukkan ke `userlist_file` dengan `userlist_deny=YES` sehingga login-nya ditolak dari awal sebelum sempat autentikasi.
-
-```sh
-systemctl restart vsftpd
-```
-
-#### D) Pembuktian
-
-```sh
-# dari node Alice
-ftp 172.16.37.10
-# login alice, lalu:
-put signal_alice.txt
-```
-
-```sh
-# dari node Eiri
-ftp 172.16.37.10
-# login eiri -> ditolak
-```
-
-#### Output
-
-<!-- masukkan screenshot signal_alice.txt berhasil terupload dan login eiri ditolak -->
+![](images/no-5.png.png)
 
 ---
 
 ### Soal 6
 
-Knights mengirim dokumen ke FTP Server Chisa pakai akun alice, lalu kita analisis sesi FTP-nya di Wireshark.
+Pada soal 6 diminta menjalankan traffic generator di node Mika, lalu sniffing pakai Wireshark dengan display filter khusus untuk paket DNS atau ICMP.
+
+File generator diunduh dari link yang dikasih, isinya di-copas ke node Mika jadi `traffic_protocol7.sh`:
 
 ```sh
-# dari node Knights
-ftp 172.16.37.10
-# login alice
-put laporan_intelijen.pdf
+nano traffic_protocol7.sh
 ```
 
-Capture Wireshark di interface Knights dengan filter:
+```sh
+#!/bin/bash
+# ============================================
+# Traffic Generator — Protocol 7 Network
+# Serial Experiments Lain — Modul 1 Jarkom 2026
+# Jalankan di node MIKA untuk generate traffic DNS & ICMP
+# ============================================
 
-ftp || ftp-data
+echo "============================================"
+echo "  Protocol 7 Traffic Generator v2026"
+echo "  Node: Mika Iwakura"
+echo "============================================"
+echo "[*] Generating DNS & ICMP traffic..."
 
-Dari capture ini yang perlu diidentifikasi:
+# ICMP Traffic
+ping -c 5 8.8.8.8 &
+ping -c 5 1.1.1.1 &
+ping -c 3 its.ac.id &
 
-- Perintah `STOR laporan_intelijen.pdf` sebagai perintah upload
-- Response `226 Transfer complete` sebagai kode sukses
-- Port data TCP yang dinegosiasikan lewat perintah `PASV`, biasa muncul di response `227 Entering Passive Mode (h1,h2,h3,h4,p1,p2)` dengan port = `p1*256 + p2`
+# DNS Queries
+nslookup google.com 8.8.8.8 &
+nslookup its.ac.id 8.8.8.8 &
+nslookup github.com 1.1.1.1 &
+dig @8.8.8.8 example.com A &
+dig @1.1.1.1 cloudflare.com AAAA &
+
+wait
+echo "[*] Traffic generation complete."
+echo "[*] Check Wireshark for captured packets."
+```
+
+```sh
+chmod +x traffic_protocol7.sh
+```
+
+Script ini generate dua jenis traffic sekaligus secara paralel (pakai `&`), ICMP lewat `ping` ke beberapa target (8.8.8.8, 1.1.1.1, its.ac.id) dan DNS query lewat `nslookup` dan `dig` ke beberapa domain. Baris `wait` di akhir mastiin script nunggu semua proses background itu selesai dulu sebelum nampilin pesan selesai.
+
+Sebelum script dijalankan, capture Wireshark di interface node Mika distart dulu, baru script dieksekusi:
+
+```sh
+./traffic_protocol7.sh
+```
+
+Setelah trafficnya kerekam, di Wireshark diterapin display filter:
+
+```
+dns or icmp
+```
 
 #### Output
 
-<!-- masukkan screenshot detail paket STOR, 226, dan PASV dari Wireshark -->
-
----
+![](images/no-6.jpeg)
 
 ### Soal 7
 
-Mika mengunduh dokumen Protokol Tujuh dari FTP Server Chisa, lalu membuktikan pembatasan read-only dengan mencoba upload dan menangkap error 550.
+Pada soal 7 Chisa mendirikan FTP Server dengan shared folder `/var/wired/data`. Kebijakan aksesnya, alice dapat read dan write, mika dibatasi read-only, eiri dibatasi tanpa izin akses sama sekali.
+
+Bikin folder shared dulu:
 
 ```sh
-# dari node Mika
-ftp 172.16.37.10
-# login mika
-get protokol_tujuh.pdf
-put file_baru.txt
+mkdir -p /var/wired/data
+chown root:root /var/wired/data
 ```
 
-Karena akun mika sudah di-override `write_enable=NO`, percobaan `put` bakal ditolak server dengan response `550 Permission denied`.
+Bikin 3 user OS yang bakal jadi akun FTP:
+
+```sh
+adduser -D alice
+adduser -D mika
+adduser -D eiri
+```
+
+Install tools yang dibutuhin, termasuk `shadow` supaya `usermod` bisa dipakai:
+
+```sh
+apk update
+apk add shadow
+apk add vsftpd
+```
+
+Bikin grup akses khusus, alice dan mika dimasukin ke grup ini:
+
+```sh
+addgroup ftpaccess
+adduser alice ftpaccess
+adduser mika ftpaccess
+```
+
+Arahin home directory ketiga user ke folder shared:
+
+```sh
+usermod -d /var/wired/data alice
+usermod -d /var/wired/data mika
+usermod -d /var/wired/data eiri
+```
+
+```sh
+chown root:ftpaccess /var/wired/data
+chmod 770 /var/wired/data
+```
+
+Whitelist alice dan mika di userlist, otomatis eiri keblacklist karena gak masuk daftar:
+
+```sh
+echo -e "alice\nmika" > /etc/vsftpd.userlist
+```
+
+Setting read-only khusus buat mika:
+
+```sh
+mkdir -p /etc/vsftpd/user_conf
+echo "write_enable=NO" > /etc/vsftpd/user_conf/mika
+```
+
+Isi `/etc/vsftpd.conf`:
+
+```sh
+listen=YES
+anonymous_enable=NO
+local_enable=YES
+write_enable=YES
+local_root=/var/wired/data
+userlist_enable=YES
+userlist_file=/etc/vsftpd.userlist
+userlist_deny=NO
+user_config_dir=/etc/vsftpd/user_conf
+seccomp_sandbox=NO
+pam_service_name=vsftpd
+pasv_enable=YES
+pasv_min_port=30000
+pasv_max_port=30100
+file_open_mode=0666
+local_umask=002
+```
+
+Jalankan servernya:
+
+```sh
+vsftpd /etc/vsftpd.conf &
+```
+
+Hasil testing pakai lftp menunjukkan user alice bisa melakukan put, get, dan ls karena punya akses penuh, user mika bisa get tapi gagal put karena `write_enable=NO`, sedangkan user eiri gagal login sama sekali sehingga semua command tidak bisa dijalankan.
 
 #### Output
 
-<!-- masukkan screenshot proses get berhasil dan pesan error 550 saat put -->
-
----
+![](images/alice-check.png)
+![](images/eiri-check.png)
+![](images/mika-check.png)
 
 ### Soal 8
 
-Knights menguji ketahanan koneksi ke Chisa dengan ping payload 128 byte, interval 0.3 detik, sebanyak 77 paket.
+Soal 8 minta Knights connect FTP ke server Chisa pakai akun alice buat upload dokumen, terus dianalisis di Wireshark: perintah STOR, status 226, dan port data PASV.
 
 ```sh
-ping -c 77 -s 128 -i 0.3 172.16.37.10
+nano knights_report.txt
+# isi file, copas dari drive
+lftp alice@192.229.2.2
+put knights_report.txt
 ```
 
-Capture Wireshark dengan filter `icmp`, lalu identifikasi:
+Analisis dari Follow TCP Stream di Wireshark:
 
-- Echo Request: ICMP Type 8, Code 0
-- Echo Reply: ICMP Type 0, Code 0
-
-Packet loss dan RTT (min/avg/max) langsung terbaca dari ringkasan output `ping` di terminal, bagian `--- 172.16.37.10 ping statistics ---`.
+- Login: `USER alice` → `331 Please specify the password.` → `PASS ...` → `230 Login successful.`
+- Mode binary: `TYPE I`
+- Negosiasi PASV: request `PASV` → response `227 Entering Passive Mode (192.229.2.2,117,57)`, artinya port data = 117×256+57 = **30009** (masuk range `pasv_min_port`-`pasv_max_port` 30000-30100 yang udah diset di vsftpd.conf)
+- Upload: `STOR knights_report.txt` → `226 Transfer complete.`
 
 #### Output
 
-<!-- masukkan screenshot output ping dan detail Type/Code ICMP di Wireshark -->
+![](images/no-9.png)
 
 ---
 
 ### Soal 9
 
-Soal ini membuktikan kelemahan Telnet lewat akun phantom_user di Chisa yang diakses dari Eiri, lalu credential-nya ditangkap plaintext di Wireshark.
+Soal 9 minta Mika download `protocol7_manifesto.txt` pakai akun mika, terus buktiin read-only-nya jalan pas nyoba upload.
 
-```sh
-# di node Chisa
-apt install telnetd xinetd -y
-useradd phantom_user
-echo "phantom_user:wired_ghost" | chpasswd
-systemctl restart xinetd
+```
+lftp mika@192.229.2.2:~> ls
+-rw-rw-r--   1 1000     1000        1111 Sep 15 20:49 knights_report.txt
+-rw-r--r--   1 0        0           1738 Sep 15 21:18 protocol7_manifesto.txt
+-rw-rw-r--   1 1000     1003          16 Sep 15 20:12 signal_alice.txt
+lftp mika@192.229.2.2:~> get protocol7_manifesto.txt
+1738 bytes transferred
+lftp mika@192.229.2.2:~> put protocol7_manifesto.txt
+put: Access failed: 550 Permission denied. (protocol7_manifesto.txt)
 ```
 
-```sh
-# dari node Eiri
-telnet 172.16.37.10
-```
-
-Capture Wireshark di interface Eiri lalu klik kanan salah satu paket TCP sesi telnet, pilih **Follow > TCP Stream**. Username dan password akan terlihat dalam bentuk teks biasa karena Telnet tidak melakukan enkripsi apapun pada payload-nya.
-
-Alasan tiap karakter terkirim dalam paket TCP terpisah adalah karena Telnet secara default berjalan dalam mode karakter-per-karakter (bukan line-buffered), setiap tombol yang ditekan langsung dikirim sebagai satu paket TCP kecil ke server untuk mendukung echo interaktif secara real-time.
-
-#### Output
-
-<!-- masukkan screenshot Follow TCP Stream yang menampilkan kredensial plaintext -->
+Terbukti mika bisa `get` tapi kena `550 Permission denied` pas `put`, sesuai `write_enable=NO` yang khusus diset buat user mika.
 
 ---
 
 ### Soal 10
 
-Alice curiga Knights menjalankan layanan rahasia, jadi dilakukan port scanning pakai Netcat ke port 22, 80, dan 7777.
+Soal 10 minta Knights ping ke Chisa buat uji latensi, payload 128 byte, interval 0.3 detik, sebanyak 77 paket.
 
 ```sh
-# dari node Alice
-nc -zv 172.16.38.10 22
-nc -zv 172.16.38.10 80
-nc -zv 172.16.38.10 7777
+ping -c 77 -s 128 -i 0.3 192.229.2.2
 ```
 
-Capture Wireshark filter `tcp.flags.syn==1` di interface Alice. Untuk port terbuka (22, 80), server membalas dengan flag **SYN-ACK**. Untuk port tertutup (7777), server membalas dengan flag **RST-ACK** karena tidak ada service yang listen di port tersebut sehingga koneksi langsung ditolak oleh kernel.
+Di Wireshark, tiap Echo Request (ICMP Type 8, Code 0) dibales Echo Reply (ICMP Type 0, Code 0) dengan id dan seq yang sama, TTL request 63 dan reply 64 (beda karena lewat hop yang beda).
+
+Hasil statistik:
+
+![](<images/no-10(2).png>)
+
+Gak ada packet loss (0%), RTT stabil di kisaran 0.4-1.06 ms, artinya koneksi ke server Chisa lancar.
 
 #### Output
 
-<!-- masukkan screenshot hasil nc dan perbandingan SYN-ACK vs RST-ACK di Wireshark -->
+![](<images/no-10(1).png>)
 
 ---
+
+### Kendala saat mengerjakan
+
+- kesusahan dalam menemukan config yang tepat pada saat nomor 7
+- kurang familiar untuk bagaimana setup gns yang bisa nyambung dengan wireshark terkait
