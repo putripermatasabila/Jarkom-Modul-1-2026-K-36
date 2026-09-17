@@ -452,9 +452,7 @@ Verifikasi service berjalan pada port 23:
 ```bash
 netstat -tuln | grep 23
 ```
-
-Hasil:
-```tcp6       0      0 :::23                   :::*                    LISTEN
+[screenshot listen 11-listen-chisa]
 
 #### Persiapan Client (Node Eiri)
 
@@ -466,8 +464,7 @@ ping -c 3 192.229.2.2
 
 Hasil menunjukkan konektivitas jaringan berfungsi normal dengan 0% packet loss:
 
-3 packets transmitted, 3 received, 0% packet loss, time 2224ms
-rtt min/avg/max/mdev = 0.819/0.852/0.900/0.034 ms
+[sceenshot 11-konek-eiri-chisa]
 
 #### Proses Capture
 
@@ -582,15 +579,6 @@ nc -vz 192.229.3.2 7777
 ```
 
 Hasil eksekusi:
-```
-Alice:~# nc -vz 192.229.3.2 22
-Connection to 192.229.3.2 22 port [tcp/ssh] succeeded!
-Alice:~# nc -vz 192.229.3.2 80
-Connection to 192.229.3.2 80 port [tcp/http] succeeded!
-Alice:~# nc -vz 192.229.3.2 7777
-nc: connect to 192.229.3.2 port 7777 (tcp) failed: Connection refused
-```
-
 > **[Catatan: sisipkan screenshot terminal Alice yang menampilkan ketiga hasil scan di atas]**
 
 Hasil menunjukkan port 22 dan 80 berada dalam status **terbuka** (`succeeded`), sedangkan port 7777 berada dalam status **tertutup** (`Connection refused`), sesuai dengan konfigurasi yang telah dipersiapkan pada node Knights.
@@ -613,15 +601,12 @@ Alice   → Knights   [ACK]
 ```
 diikuti dengan paket `[FIN, ACK]` karena mode `-z` pada Netcat langsung menutup koneksi setelah verifikasi konektivitas berhasil.
 
-> **[Catatan: sisipkan screenshot/detail paket yang menunjukkan flag `[SYN, ACK]` dari Knights untuk port 22 atau 80]**
-
 **Untuk port 7777 (kondisi tertutup),** handshake tidak pernah selesai. Paket yang terekam hanya:
 ```
 Alice   → Knights   [SYN]
 Knights → Alice     [RST, ACK]
 ```
-
-> **[Catatan: sisipkan screenshot/detail paket yang menunjukkan flag `[RST, ACK]` dari Knights untuk port 7777]**
+> **[Catatan: sisipkan screenshot/detail paket yang menunjukkan filter]*
 
 #### Perbandingan TCP Flag
 
@@ -630,3 +615,134 @@ Knights → Alice     [RST, ACK]
 | Terbuka (22, 80) | `SYN, ACK` | Terdapat proses (listener) yang bind ke port tersebut dan bersedia menerima koneksi, sehingga kernel merespons dengan melanjutkan proses handshake |
 | Tertutup (7777) | `RST, ACK` | Tidak ada proses yang listen pada port tersebut, sehingga kernel segera menolak permintaan koneksi dengan mengirimkan flag reset (RST) tanpa melanjutkan handshake |
 
+### Soal 13
+
+Lain memerintahkan agar administrasi jarak jauh menggunakan SSH secara aman tanpa password. Install OpenSSH server pada node Knights, buat pasangan kunci SSH (ssh-keygen) pada node Mika untuk user mika_admin, dan konfigurasikan public key authentication (PasswordAuthentication no). Lakukan koneksi SSH dari node Mika ke node Knights, tangkap sesi menggunakan Wireshark, identifikasi paket Protocol Version Exchange dan Key Exchange, serta jelaskan mengapa kredensial tidak terlihat dalam bentuk teks terbuka seperti pada Telnet.
+
+#### Topologi & Skenario
+
+Simulasi mengacu pada studi kasus Serial Experiments Lain: Lain memerintahkan agar administrasi jarak jauh dilakukan secara aman. OpenSSH server diinstal pada node Knights, sementara node Mika bertindak sebagai client yang melakukan koneksi menggunakan keypair SSH atas nama user mika_admin.
+
+Node	Peran	IP
+```
+Knights	SSH Server	192.229.3.2
+Mika	SSH Client (user: mika_admin)	192.229.1.3
+````
+
+#### Instalasi dan Konfigurasi SSH Server (Node Knights)
+```bash
+apk update
+apk add openssh
+ssh-keygen -A
+passwd root
+/usr/sbin/sshd
+```
+
+Verifikasi service berjalan pada port 22:
+
+```bash
+netstat -tuln | grep 22
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN
+tcp6       0      0 :::22                   :::*                    LISTEN
+```
+
+Konfigurasi `/etc/ssh/sshd_config` diatur sebagai berikut untuk mengaktifkan autentikasi berbasis public key:
+
+```conf
+PermitRootLogin yes
+PubkeyAuthentication yes
+PasswordAuthentication no
+
+#### Generate Keypair SSH (Node Mika)
+
+Instalasi SSH client dan pembuatan user khusus:
+
+```bash
+apk add openssh-client shadow
+useradd -m mika_admin
+passwd mika_admin
+su - mika_admin
+```
+
+Generate RSA keypair 2048-bit:
+
+```bash
+ssh-keygen -t rsa -b 2048
+```
+
+Hasil:
+
+Your identification has been saved in /home/mika_admin/.ssh/id_rsa
+Your public key has been saved in /home/mika_admin/.ssh/id_rsa.pub
+The key fingerprint is:
+SHA256:Iojs0aNTCqtaoHkiC7YDPPKYLFeAeEGLfs/SAkf3liE mika_admin@Mika
+
+#### Distribusi Public Key ke Server
+
+Isi public key ditampilkan di Mika:
+
+```bash
+cat ~/.ssh/id_rsa.pub
+```
+
+Kemudian ditambahkan secara manual ke file `authorized_keys` pada node Knights:
+
+```bash
+mkdir -p /root/.ssh
+nano /root/.ssh/authorized_keys    # paste isi public key
+chmod 700 /root/.ssh
+chmod 600 /root/.ssh/authorized_keys
+```
+
+#### Proses Capture dan Koneksi SSH
+
+Capture dimulai pada link antara Switch1–Mika (eth0) sebelum koneksi SSH dijalankan, untuk memastikan seluruh fase handshake tertangkap. Koneksi dilakukan dari user mika_admin di Mika:
+
+```bash
+ssh -v root@192.229.3.2
+```
+
+Koneksi berhasil dan langsung masuk ke shell Knights tanpa diminta password sama sekali, membuktikan autentikasi berbasis public key berfungsi dengan benar.
+
+#### Analisis Wireshark
+
+Display filter yang digunakan:
+
+```tcp.stream eq 0```
+
+Hasil capture menunjukkan urutan lengkap fase komunikasi SSH sebagai berikut:
+
+[Catatan: sisipkan screenshot Packet List di atas — capture lengkap dari No.1 sampai beberapa paket Encrypted setelahnya]
+
+##### Identifikasi Protocol Version Exchange
+
+Paket No. 6 (Server: Protocol) di-expand pada bagian SSH Protocol, menampilkan isi plaintext:
+
+```Protocol: SSH-2.0-OpenSSH_10.2
+[Direction: Server to Client]
+```
+
+[Catatan: sisipkan screenshot Packet Details paket No. 6 yang menunjukkan teks plaintext "Protocol: SSH-2.0-OpenSSH_10.2"]
+
+Ini adalah satu-satunya bagian dari sesi SSH yang dikirim dalam bentuk plaintext, karena kedua pihak perlu saling mengetahui versi protokol yang didukung sebelum proses enkripsi dapat dinegosiasikan.
+
+##### Identifikasi Key Exchange
+
+Pada paket No. 9, 11 dan 12 terlihat proses negosiasi algoritma kriptografi (Key Exchange Init), dilanjutkan dengan PQ/T Hybrid Key Exchange, sebuah skema Diffie-Hellman modern yang menggabungkan algoritma tradisional dengan algoritma tahan-kuantum (post-quantum) untuk keamanan tambahan terhadap ancaman komputasi kuantum di masa depan.
+
+Setelah paket "New Keys" pada No. 13, seluruh komunikasi berikutnya (termasuk proses autentikasi user) berubah menjadi Encrypted packet yang tidak dapat dibaca isinya sama sekali oleh pihak ketiga.
+
+#### Perbandingan dengan Telnet
+| Aspek | Telnet | SSH |
+|---|---|---|
+| Kredensial saat login | Plaintext, terbaca langsung (`phantom_user`, `wired_ghost`) | Tidak pernah dikirim, private key tetap di client |
+| Isi sesi komunikasi | Seluruhnya plaintext | Terenkripsi setelah Key Exchange |
+| Follow TCP Stream | Menampilkan teks percakapan lengkap | Menampilkan data biner/acak (tidak terbaca) |
+| Bagian yang plaintext | Seluruh sesi | Hanya Protocol Version Exchange |
+
+#### Analisis
+
+Kredensial Tidak Terlihat Plaintext seperti Telnet Key Exchange (Diffie-Hellman Hybrid) dilakukan di awal sesi untuk menyepakati session key rahasia antara client dan server, tanpa pernah mengirim kunci privat melalui jaringan, kedua pihak menghitung shared secret yang sama secara independen berdasarkan pertukaran nilai publik.
+Setelah Key Exchange selesai (ditandai paket "New Keys"), seluruh komunikasi berikutnya dienkripsi menggunakan algoritma simetris yang telah disepakati.
+Karena autentikasi menggunakan public key, private key milik mika_admin tidak pernah dikirim melalui jaringan sama sekali. Proses yang terjadi adalah server mengirimkan challenge yang harus ditandatangani secara digital oleh private key di sisi client, dan hanya hasil tanda tangan (signature) tersebut yang dikirim balik ke server untuk diverifikasi menggunakan public key yang telah terdaftar di authorized_keys.
+Hal ini kontras total dengan Telnet, yang mengirimkan setiap karakter kredensial secara langsung tanpa perlindungan enkripsi apapun.Pengujian ini membuktikan bahwa SSH dengan autentikasi berbasis public key memberikan tingkat keamanan jauh lebih tinggi dibandingkan Telnet. 
