@@ -154,7 +154,7 @@ Baris `up echo "nameserver 8.8.8.8" > /etc/resolv.conf` itu bagian dari `/etc/ne
 #### Output
 
 ![](images/ping-8.8.8.8.png)
-![](images/ping-google-alice.png.png)
+![](images/ping-google-alice.png)
 
 ---
 
@@ -189,7 +189,7 @@ Jadi begitu router Lain nyala ulang, `router.sh` langsung nerapin ulang aturan N
 
 #### Output
 
-![](images/no-5.png.png)
+![](images/no-5.png)
 
 ---
 
@@ -537,10 +537,10 @@ Alice mencurigai Knights menjalankan beberapa layanan rahasia di node-nya. Lakuk
 
 Simulasi mengacu pada studi kasus _Serial Experiments Lain_: Alice mencurigai adanya layanan tersembunyi pada node Knights, lalu melakukan pemindaian terhadap tiga port sekaligus: dua port umum (SSH/HTTP) dan satu port rahasia.
 
-| Node    | Peran                | IP                     |
-| ------- | -------------------- | ---------------------- |
-| Knights | Target scan          | 192.229.3.2            |
-| Alice   | Penyerang / pemindai | 192.229.1.2            |
+| Node    | Peran                | IP          |
+| ------- | -------------------- | ----------- |
+| Knights | Target scan          | 192.229.3.2 |
+| Alice   | Penyerang / pemindai | 192.229.1.2 |
 
 #### Konfigurasi Target (Node Knights)
 
