@@ -540,7 +540,7 @@ Simulasi mengacu pada studi kasus _Serial Experiments Lain_: Alice mencurigai ad
 | Node    | Peran                | IP                     |
 | ------- | -------------------- | ---------------------- |
 | Knights | Target scan          | 192.229.3.2            |
-| Alice   | Penyerang / pemindai | (sesuai IP node Alice) |
+| Alice   | Penyerang / pemindai | 192.229.1.2            |
 
 #### Konfigurasi Target (Node Knights)
 
