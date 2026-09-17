@@ -6,7 +6,7 @@
 
 | Nama                    | NRP        |
 | ----------------------- | ---------- |
-| Nazwa Aulia Dwi Purnomo | 5027251118 |
+| Nazwa Aulia Dwi Purnomo | 5027251018 |
 | Putri Permata Sabila    | 5027251047 |
 
 ## Laporan Resmi
@@ -652,6 +652,7 @@ Konfigurasi `/etc/ssh/sshd_config` diatur sebagai berikut untuk mengaktifkan aut
 PermitRootLogin yes
 PubkeyAuthentication yes
 PasswordAuthentication no
+```
 
 #### Generate Keypair SSH (Node Mika)
 
@@ -672,10 +673,12 @@ ssh-keygen -t rsa -b 2048
 
 Hasil:
 
+```
 Your identification has been saved in /home/mika_admin/.ssh/id_rsa
 Your public key has been saved in /home/mika_admin/.ssh/id_rsa.pub
 The key fingerprint is:
 SHA256:Iojs0aNTCqtaoHkiC7YDPPKYLFeAeEGLfs/SAkf3liE mika_admin@Mika
+```
 
 #### Distribusi Public Key ke Server
 
