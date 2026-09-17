@@ -498,7 +498,7 @@ Untuk memfokuskan analisis hanya pada sesi Telnet, diterapkan display filter:
 
 Filter berhasil menyaring 34 dari 36 paket total (94.4%), membuang 2 paket ARP yang tidak relevan dengan sesi Telnet.
 
-[!11-4](images/11-setelah-filter.png)
+[![11-4](images/11-setelah-filter.png)]
 
 Pada tahap awal koneksi, terlihat proses negosiasi opsi Telnet (Telnet option negotiation) antara client dan server, seperti:
 
