@@ -430,9 +430,11 @@ Buktikan kelemahan protokol Telnet dengan membuat akun phantom_user dan password
 
 Simulasi mengacu pada studi kasus Serial Experiments Lain: Eiri (penyerang) mencoba mengakses layanan Telnet yang berjalan pada node Chisa menggunakan akun uji phantom_user. Traffic antara kedua node melewati Router (Lain) karena keduanya berada pada subnet/switch yang berbeda.
 
+```
 Node	Peran	IP :
 Chisa	Telnet Server	192.229.2.2
 Eiri	Telnet Client	192.229.3.3
+```
 
 #### Konfigurasi Server (Node Chisa)
 
@@ -452,7 +454,8 @@ Verifikasi service berjalan pada port 23:
 ```bash
 netstat -tuln | grep 23
 ```
-[screenshot listen 11-listen-chisa]
+
+[![11-1](images/11-listen-chisa.png)]
 
 #### Persiapan Client (Node Eiri)
 
@@ -464,7 +467,7 @@ ping -c 3 192.229.2.2
 
 Hasil menunjukkan konektivitas jaringan berfungsi normal dengan 0% packet loss:
 
-[sceenshot 11-konek-eiri-chisa]
+[![11-2](images/11-konek-eiri-chisa.png)]
 
 #### Proses Capture
 
@@ -478,14 +481,16 @@ telnet 192.229.2.2
 
 Login dilakukan menggunakan kredensial:
 
+```
 login: phantom_user
 Password: wired_ghost
+```
 
 Hasil capture awal menunjukkan traffic dengan protokol TELNET terdeteksi otomatis oleh Wireshark, ditandai dengan banyaknya paket berukuran kecil (2–13 bytes) yang merepresentasikan pengiriman data per karakter, diselingi beberapa paket ARP (ARP Request/Reply) sebagai proses resolusi alamat MAC sebelum komunikasi TCP dimulai.
 
-[Catatan: sisipkan screenshot Wireshark Packet List — tampilan awal capture sebelum filter, menunjukkan mix TCP/TELNET/ARP]
+[![11-3](images/11-sebelum-filter.png)]
 
-6. Penerapan Display Filter
+#### Penerapan Display Filter
 
 Untuk memfokuskan analisis hanya pada sesi Telnet, diterapkan display filter:
 
@@ -493,7 +498,7 @@ Untuk memfokuskan analisis hanya pada sesi Telnet, diterapkan display filter:
 
 Filter berhasil menyaring 34 dari 36 paket total (94.4%), membuang 2 paket ARP yang tidak relevan dengan sesi Telnet.
 
-[Catatan: sisipkan screenshot Packet List setelah filter tcp.port == 23 diterapkan]
+[!11-4](images/11-setelah-filter.png)
 
 Pada tahap awal koneksi, terlihat proses negosiasi opsi Telnet (Telnet option negotiation) antara client dan server, seperti:
 
@@ -508,7 +513,7 @@ Negosiasi ini merupakan bagian dari protokol Telnet untuk menyepakati mode termi
 
 Untuk merekonstruksi keseluruhan isi sesi komunikasi, dilakukan `Follow → TCP Stream` pada salah satu paket TELNET. Hasil rekonstruksi menampilkan seluruh isi percakapan dalam bentuk teks yang mudah dibaca:
 
-[Catatan: sisipkan screenshot jendela Follow TCP Stream yang menampilkan phantom_user dan wired_ghost — ini adalah bukti utama laporan]
+[![11-5](images/11-plain-text.png)]
 
 Dari hasil ini terbukti bahwa kredensial login (phantom_user dan wired_ghost) terkirim dalam bentuk plain text, dapat dibaca langsung tanpa proses dekripsi apapun oleh siapa pun yang mampu menyadap traffic jaringan.
 
@@ -529,12 +534,13 @@ Temuan ini menegaskan bahwa protokol Telnet tidak layak digunakan pada jaringan 
 Alice mencurigai Knights menjalankan beberapa layanan rahasia di node-nya. Lakukan pemindaian port dari node Alice ke node Knights menggunakan Netcat (nc) untuk memeriksa port 22 (SSH) dan 80 (HTTP) dalam keadaan terbuka, serta port rahasia 7777 dalam keadaan tertutup. Analisis di Wireshark perbedaan TCP Flag yang dikembalikan antara port terbuka (SYN-ACK) dengan port tertutup (RST-ACK).
 
 #### Topologi & Skenario
-Simulasi mengacu pada studi kasus *Serial Experiments Lain*: Alice mencurigai adanya layanan tersembunyi pada node Knights, lalu melakukan pemindaian terhadap tiga port sekaligus: dua port umum (SSH/HTTP) dan satu port rahasia.
 
-| Node | Peran | IP |
-|---|---|---|
-| Knights | Target scan | 192.229.3.2 |
-| Alice | Penyerang / pemindai | (sesuai IP node Alice) |
+Simulasi mengacu pada studi kasus _Serial Experiments Lain_: Alice mencurigai adanya layanan tersembunyi pada node Knights, lalu melakukan pemindaian terhadap tiga port sekaligus: dua port umum (SSH/HTTP) dan satu port rahasia.
+
+| Node    | Peran                | IP                     |
+| ------- | -------------------- | ---------------------- |
+| Knights | Target scan          | 192.229.3.2            |
+| Alice   | Penyerang / pemindai | (sesuai IP node Alice) |
 
 #### Konfigurasi Target (Node Knights)
 
@@ -549,11 +555,12 @@ nc -lk -p 80 &
 ```
 
 Verifikasi kedua listener aktif:
+
 ```bash
 netstat -tuln | grep -E '22|80'
 ```
 
-> **[Catatan: sisipkan screenshot terminal Knights yang menampilkan output `netstat` di atas]**
+[![12-1](images/12-knights-netstat.png)]
 
 Port 7777 tidak dikonfigurasi apapun, sehingga secara default berada dalam keadaan tertutup di level kernel.
 
@@ -579,7 +586,7 @@ nc -vz 192.229.3.2 7777
 ```
 
 Hasil eksekusi:
-> **[Catatan: sisipkan screenshot terminal Alice yang menampilkan ketiga hasil scan di atas]**
+[![12-2](images/12-alice-scan-3.png)]
 
 Hasil menunjukkan port 22 dan 80 berada dalam status **terbuka** (`succeeded`), sedangkan port 7777 berada dalam status **tertutup** (`Connection refused`), sesuai dengan konfigurasi yang telah dipersiapkan pada node Knights.
 
@@ -591,29 +598,33 @@ Capture dihentikan setelah proses scanning selesai, kemudian disimpan sebagai `n
 tcp.port == 22 or tcp.port == 80 or tcp.port == 7777
 ```
 
-> **[Catatan: sisipkan screenshot Packet List Wireshark setelah filter diterapkan]**
+[![12-3](images/12-wireshark-filter.png)]
 
 **Untuk port 22 dan 80 (kondisi terbuka),** rangkaian paket menunjukkan proses TCP three-way handshake yang berhasil diselesaikan:
+
 ```
 Alice   → Knights   [SYN]
 Knights → Alice     [SYN, ACK]
 Alice   → Knights   [ACK]
 ```
+
 diikuti dengan paket `[FIN, ACK]` karena mode `-z` pada Netcat langsung menutup koneksi setelah verifikasi konektivitas berhasil.
 
 **Untuk port 7777 (kondisi tertutup),** handshake tidak pernah selesai. Paket yang terekam hanya:
+
 ```
 Alice   → Knights   [SYN]
 Knights → Alice     [RST, ACK]
 ```
-> **[Catatan: sisipkan screenshot/detail paket yang menunjukkan filter]*
+
+> \*_[Catatan: sisipkan screenshot/detail paket yang menunjukkan filter]_
 
 #### Perbandingan TCP Flag
 
-| Kondisi Port | Flag yang Diterima | Penjelasan |
-|---|---|---|
-| Terbuka (22, 80) | `SYN, ACK` | Terdapat proses (listener) yang bind ke port tersebut dan bersedia menerima koneksi, sehingga kernel merespons dengan melanjutkan proses handshake |
-| Tertutup (7777) | `RST, ACK` | Tidak ada proses yang listen pada port tersebut, sehingga kernel segera menolak permintaan koneksi dengan mengirimkan flag reset (RST) tanpa melanjutkan handshake |
+| Kondisi Port     | Flag yang Diterima | Penjelasan                                                                                                                                                         |
+| ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Terbuka (22, 80) | `SYN, ACK`         | Terdapat proses (listener) yang bind ke port tersebut dan bersedia menerima koneksi, sehingga kernel merespons dengan melanjutkan proses handshake                 |
+| Tertutup (7777)  | `RST, ACK`         | Tidak ada proses yang listen pada port tersebut, sehingga kernel segera menolak permintaan koneksi dengan mengirimkan flag reset (RST) tanpa melanjutkan handshake |
 
 ### Soal 13
 
@@ -623,13 +634,15 @@ Lain memerintahkan agar administrasi jarak jauh menggunakan SSH secara aman tanp
 
 Simulasi mengacu pada studi kasus Serial Experiments Lain: Lain memerintahkan agar administrasi jarak jauh dilakukan secara aman. OpenSSH server diinstal pada node Knights, sementara node Mika bertindak sebagai client yang melakukan koneksi menggunakan keypair SSH atas nama user mika_admin.
 
-Node	Peran	IP
+Node Peran IP
+
 ```
 Knights	SSH Server	192.229.3.2
 Mika	SSH Client (user: mika_admin)	192.229.1.3
-````
+```
 
 #### Instalasi dan Konfigurasi SSH Server (Node Knights)
+
 ```bash
 apk update
 apk add openssh
@@ -711,7 +724,7 @@ Koneksi berhasil dan langsung masuk ke shell Knights tanpa diminta password sama
 
 Display filter yang digunakan:
 
-```tcp.stream eq 0```
+`tcp.stream eq 0`
 
 Hasil capture menunjukkan urutan lengkap fase komunikasi SSH sebagai berikut:
 
@@ -736,16 +749,426 @@ Pada paket No. 9, 11 dan 12 terlihat proses negosiasi algoritma kriptografi (Key
 Setelah paket "New Keys" pada No. 13, seluruh komunikasi berikutnya (termasuk proses autentikasi user) berubah menjadi Encrypted packet yang tidak dapat dibaca isinya sama sekali oleh pihak ketiga.
 
 #### Perbandingan dengan Telnet
-| Aspek | Telnet | SSH |
-|---|---|---|
+
+| Aspek                 | Telnet                                                      | SSH                                               |
+| --------------------- | ----------------------------------------------------------- | ------------------------------------------------- |
 | Kredensial saat login | Plaintext, terbaca langsung (`phantom_user`, `wired_ghost`) | Tidak pernah dikirim, private key tetap di client |
-| Isi sesi komunikasi | Seluruhnya plaintext | Terenkripsi setelah Key Exchange |
-| Follow TCP Stream | Menampilkan teks percakapan lengkap | Menampilkan data biner/acak (tidak terbaca) |
-| Bagian yang plaintext | Seluruh sesi | Hanya Protocol Version Exchange |
+| Isi sesi komunikasi   | Seluruhnya plaintext                                        | Terenkripsi setelah Key Exchange                  |
+| Follow TCP Stream     | Menampilkan teks percakapan lengkap                         | Menampilkan data biner/acak (tidak terbaca)       |
+| Bagian yang plaintext | Seluruh sesi                                                | Hanya Protocol Version Exchange                   |
 
 #### Analisis
 
 Kredensial Tidak Terlihat Plaintext seperti Telnet Key Exchange (Diffie-Hellman Hybrid) dilakukan di awal sesi untuk menyepakati session key rahasia antara client dan server, tanpa pernah mengirim kunci privat melalui jaringan, kedua pihak menghitung shared secret yang sama secara independen berdasarkan pertukaran nilai publik.
 Setelah Key Exchange selesai (ditandai paket "New Keys"), seluruh komunikasi berikutnya dienkripsi menggunakan algoritma simetris yang telah disepakati.
 Karena autentikasi menggunakan public key, private key milik mika_admin tidak pernah dikirim melalui jaringan sama sekali. Proses yang terjadi adalah server mengirimkan challenge yang harus ditandatangani secara digital oleh private key di sisi client, dan hanya hasil tanda tangan (signature) tersebut yang dikirim balik ke server untuk diverifikasi menggunakan public key yang telah terdaftar di authorized_keys.
-Hal ini kontras total dengan Telnet, yang mengirimkan setiap karakter kredensial secara langsung tanpa perlindungan enkripsi apapun.Pengujian ini membuktikan bahwa SSH dengan autentikasi berbasis public key memberikan tingkat keamanan jauh lebih tinggi dibandingkan Telnet. 
+Hal ini kontras total dengan Telnet, yang mengirimkan setiap karakter kredensial secara langsung tanpa perlindungan enkripsi apapun.Pengujian ini membuktikan bahwa SSH dengan autentikasi berbasis public key memberikan tingkat keamanan jauh lebih tinggi dibandingkan Telnet.
+
+### Soal 14
+
+Setelah gagal mengakses FTP, Eiri melancarkan serangan brute-force terhadap form login web Alice. Analisis file capture wired_bruteforce.pcapng untuk mengidentifikasi alamat IP penyerang, target IP beserta port yang diserang, password user lain_admin yang berhasil ditembus, serta web server software dan versi yang dilaporkan pada response header. Validasi temuan kalian pada socket server:
+([link file](https://drive.google.com/drive/folders/1-MloxOyGauBYglc6TKTQ84VeILvJjjG2?usp=sharing)) nc [IP_Group] 3401
+
+#### Metodologi Analisis
+
+File capture dibuka langsung di Wireshark tanpa proses live capture (analisis forensik post-mortem). Tahapan analisis:
+
+a. Identifikasi paket awal untuk menentukan IP dan port yang terlibat
+
+Pemeriksaan pada salah satu paket TCP menunjukkan:
+
+[Catatan: sisipkan screenshot Packet Details paket TCP yang menunjukkan Source/Destination IP dan Port di atas]
+
+b. Penerapan filter untuk fokus pada response HTTP
+
+`http.response`
+
+Hasil filter menampilkan ratusan baris response dengan pola dominan:
+
+`172.26.7.100 → 172.26.7.50    HTTP/1.1 401 Unauthorized  (text/html)`
+
+Pola ini konsisten dengan karakteristik serangan brute-force, di mana penyerang melakukan percobaan login berulang kali dan menerima penolakan pada setiap percobaan yang gagal.
+
+[Catatan: sisipkan screenshot Packet List hasil filter http.response menampilkan deretan response 401 Unauthorized]
+
+c. Identifikasi response yang menandakan keberhasilan
+
+Di antara ratusan response 401 Unauthorized, ditemukan satu paket (No. 351) dengan status berbeda:
+
+`172.26.7.100 → 172.26.7.50    HTTP/1.1 200 OK  (text/html)`
+
+Response 200 OK ini mengindikasikan bahwa percobaan login pada titik tersebut berhasil diterima oleh server, berbeda dari mayoritas percobaan sebelumnya yang ditolak.
+
+[Catatan: sisipkan screenshot yang menunjukkan kontras antara response 401 Unauthorized (mayoritas) dengan 200 OK (No. 351)]
+
+d. Identifikasi payload request yang menyebabkan keberhasilan
+
+Paket request tepat sebelum response sukses (No. 350) diperiksa pada bagian HTML Form URL Encoded:
+
+`POST /login.php HTTP/1.1  (application/x-www-form-urlencoded)`
+
+[Catatan: sisipkan screenshot Packet Details paket No. 350 yang menampilkan Form item username dan password]
+
+#### Hasil Temuan
+
+| Item                            | Nilai              |
+| ------------------------------- | ------------------ |
+| Alamat IP Penyerang             | 172.26.7.50        |
+| Alamat IP Target (Korban)       | 172.26.7.100       |
+| Port yang diserang              | 8080               |
+| Endpoint yang diserang          | `/login.php`       |
+| Username yang berhasil ditembus | `lain_admin`       |
+| Password yang berhasil ditembus | `wired_pr0tocol_7` |
+
+#### Identifikasi Web Server Software
+
+[Catatan: sisipkan screenshot Packet Details paket No. 351 bagian Hypertext Transfer Protocol → Response Header "Server: ..." beserta isi lengkap yang tertera]
+
+#### Validasi Temuan
+
+Temuan divalidasi melalui socket server sesuai instruksi soal:
+
+```bash
+nc 10.4.89.246 3401
+```
+
+#### Kesimpulan
+
+Analisis forensik terhadap file wired_bruteforce.pcapng berhasil mengungkap pola serangan brute-force yang ditandai dengan ratusan percobaan login berulang (response 401 Unauthorized) yang berasal dari satu alamat IP penyerang (172.26.7.50) terhadap satu target (172.26.7.100:8080). Percobaan ke-N akhirnya berhasil menembus autentikasi dengan kredensial lain_admin/wired_protocol_7, ditandai dengan perubahan response menjadi 200 OK. Teknik identifikasi ini mencari anomali status code di antara pola response yang seragam dimana hl ini merupakan pendekatan forensik dasar yang efektif untuk mendeteksi serangan brute-force pada traffic HTTP.
+
+### Soal 15
+
+Eiri menyusup ke ruang server dan memasang perangkat keyboard USB berbahaya pada node Alice. Buka file capture wired_usb_hid.pcap, identifikasi Vendor ID dan Product ID perangkat USB dari deskriptor USB, alamat nomor device USB, serta pesan rahasia yang berhasil dicuri dari keystroke. Validasi temuan kalian pada socket server:
+([link file](https://drive.google.com/drive/folders/1oAPzN9IEN0264_LlvGnl_CsIiYh-Hp8w?usp=drive_link)) nc [IP_Group] 3402
+
+#### Metodologi Analisis
+
+**a. Membuka file capture**
+File `wired_usb_hid.pcap` dibuka langsung di Wireshark tanpa proses live capture.
+
+**b. Identifikasi Vendor ID dan Product ID**
+
+Filter yang digunakan:
+
+```
+usb
+```
+
+Paket dengan Info **"GET DESCRIPTOR Response DEVICE"** diperiksa pada bagian **USB Device Descriptor** di Packet Details, menampilkan:
+
+```
+idVendor: 0x____
+idProduct: 0x____
+```
+
+> **[Catatan: sisipkan screenshot Packet Details paket GET DESCRIPTOR Response yang menampilkan idVendor dan idProduct]**
+
+**c. Identifikasi alamat nomor device USB**
+
+Nomor device diperoleh dari field **Device** pada URB (USB Request Block) header di Packet Details paket-paket USB yang terkait.
+
+> **[Catatan: sisipkan screenshot Packet Details yang menunjukkan field Device/Device Address]**
+
+**d. Rekonstruksi pesan rahasia dari keystroke**
+
+Filter digunakan untuk menyaring paket data HID:
+
+```
+usb.capdata
+```
+
+Setiap paket data HID keyboard terdiri dari 8 byte, dengan byte pertama sebagai modifier key dan byte ketiga dan seterusnya berisi kode HID Usage ID untuk tombol yang ditekan. Setiap kode HID diterjemahkan satu per satu menggunakan tabel referensi **USB HID Keyboard Usage ID** untuk menyusun pesan lengkap.
+
+> **[Catatan: sisipkan screenshot Packet List hasil filter `usb.capdata` beserta contoh beberapa byte data HID yang diterjemahkan]**
+
+#### Hasil Temuan
+
+| Item                          | Nilai                            |
+| ----------------------------- | -------------------------------- |
+| Vendor ID (idVendor)          | ` 0x046d`                        |
+| Product ID (idProduct)        | `0xc31c`                         |
+| Alamat nomor device USB       | `7`                              |
+| Pesan rahasia hasil keystroke | `Wired_Protocol_7_is_alive_2026` |
+
+#### Validasi Temuan
+
+```bash
+nc 10.4.89.246 3402
+```
+
+#### Kesimpulan
+
+Analisis forensik pada file `wired_usb_hid.pcap` membuktikan bahwa serangan _keystroke injection_ melalui perangkat USB HID palsu dapat diidentifikasi dan direkonstruksi secara lengkap dari lalu lintas USB yang tercatat, meskipun tidak melibatkan komunikasi jaringan konvensional. Identifikasi Vendor ID dan Product ID juga memungkinkan pelacakan jenis perangkat fisik yang digunakan penyerang.
+
+### Soal 16
+
+Eiri meletakkan file malware di server. Dari file capture wired_ftp_theft.pcap, lakukan analisis lalu lintas FTP untuk mengidentifikasi alamat IP server FTP penyerang, banner software FTP yang digunakan, kredensial login penyerang, serta ukuran (size in bytes) dari file malware knights_payload.exe yang diunduh. Validasi temuan kalian pada socket server:
+([link file](https://drive.google.com/drive/folders/1qBeAXVx1MG14L0jzGefqs3t8qO8VRMmb?usp=sharing)) nc [IP_Group] 3403
+
+#### Metodologi Analisis
+
+**a. Identifikasi banner server FTP**
+
+Filter:
+
+```
+ftp
+```
+
+Paket pertama dari server (response awal koneksi) diperiksa pada kolom Info:
+
+> **[Catatan: sisipkan screenshot paket response 220 yang menampilkan banner FTP server]**
+
+**b. Identifikasi kredensial login**
+
+Ditemukan dari `Follow TCP Stream` :
+
+> **[Catatan: sisipkan screenshot paket USER dan PASS pada control channel FTP]**
+
+**c. Identifikasi ukuran file malware**
+
+Filter diubah ke:
+
+```
+ftp-data
+```
+
+Ukuran file ditemukan melalui layar yang sama dengan sebelumnya dab dilihat di kolom **Bytes** sebagai ukuran total file `knights_payload.exe` yang ditransfer.
+
+> **[Catatan: sisipkan screenshot Statistics → Conversations menunjukkan ukuran bytes koneksi data channel]**
+
+#### Hasil Temuan
+
+| Item                                 | Nilai                                |
+| ------------------------------------ | ------------------------------------ |
+| IP Server FTP Penyerang              | `198.51.100.7`                       |
+| Banner software FTP                  | `Wired FTP Server (vsftpd 3.0.5)`    |
+| Kredensial login (username/password) | `knights_agent` / `N4v1_s3cur3_2026` |
+| Ukuran file `knights_payload.exe`    | `524288 bytes`                       |
+
+#### Validasi Temuan
+
+```bash
+nc 10.4.89.246 3403
+```
+
+#### Kesimpulan
+
+Protokol FTP yang tidak terenkripsi memungkinkan seluruh proses autentikasi maupun aktivitas transfer file, termasuk file malware yang dapat diamati secara penuh melalui analisis packet capture, meliputi identitas server, kredensial yang digunakan, hingga ukuran payload yang diunduh oleh korban.
+
+### Soal 17
+
+Alice membuat halaman web di node-nya. Eiri memanfaatkan celah untuk mengunduh payload berbahaya ke sistem Alice. Analisis file capture wired_http_c2.pcap untuk mengidentifikasi nama domain (Host) tempat malware diunduh, alamat IP server penyerang, nama file executable malware yang diunduh, serta kode status HTTP yang dikembalikan. Validasi temuan kalian pada socket server:
+([link file](https://drive.google.com/drive/folders/1iPYESj5AN-uXYXfD2Wo2cRrm_Rigr_D6?usp=sharing)) nc [IP_Group] 3404
+
+#### Metodologi Analisis
+
+**a. Identifikasi request pengunduhan**
+
+Filter:
+
+```
+http
+```
+
+Paket **GET request** diperiksa pada bagian **Hypertext Transfer Protocol** di Packet Details, meliputi:
+
+```
+Host: wired-update.net\r\n
+GET /navi_agent.exe HTTP/1.1\r\n
+```
+
+> **[Catatan: sisipkan screenshot Packet Details request GET yang menampilkan Host header dan path file yang diunduh]**
+
+**b. Identifikasi response server**
+
+Paket response dari server diperiksa pada kolom Info:
+
+```
+HTTP/1.1 200 OK
+```
+
+> **[Catatan: sisipkan screenshot paket response HTTP beserta status code-nya]**
+
+**c. Identifikasi IP server penyerang**
+
+Diambil dari packet detail.
+(ss an ip-dst)
+
+#### Hasil Temuan
+
+| Item                         | Nilai              |
+| ---------------------------- | ------------------ |
+| Nama domain (Host)           | `wired-update.net` |
+| Alamat IP server penyerang   | `203.0.113.42`     |
+| Nama file executable malware | `navi_agent.exe`   |
+| Kode status HTTP             | `200`              |
+
+#### Validasi Temuan
+
+```bash
+nc 10.4.89.246 3404
+```
+
+#### Kesimpulan
+
+Traffic HTTP yang tidak terenkripsi memungkinkan seluruh detail proses download malware — mulai dari domain sumber, path file, hingga status keberhasilan unduhan — dapat direkonstruksi sepenuhnya melalui analisis packet capture tanpa memerlukan proses dekripsi tambahan.
+
+### Soal 18
+
+Eiri mengubah taktik penyerangan dengan menanamkan file malware menggunakan protokol file sharing SMB. Analisis file capture wired_smb_transfer.pcapng untuk mengidentifikasi nama protokol jaringan yang dieksploitasi, IP pengirim dan penerima, folder tujuan penyimpanan malware pada sistem korban, serta nama file executable malware yang ditransfer. Validasi temuan kalian pada socket server:
+([link file](https://drive.google.com/file/d/1XBtKWtNM_RrSBTp2e3O5vBdiklcPNsKs/view?usp=sharing)) nc [IP_Group] 3405
+
+#### Metodologi Analisis
+
+**a. Identifikasi protokol dan share yang diakses**
+
+Filter:
+
+```
+smb2
+```
+
+> **[Catatan: sisipkan screenshot paket Tree Connect Request yang menunjukkan path share]**
+
+**b. Identifikasi nama file dan folder tujuan**
+
+Paket dengan Info **"Write Request"** diperiksa untuk melihat nama file yang dibuat/dibuka pada sistem korban.
+
+> **[Catatan: sisipkan screenshot paket Create Request yang menampilkan nama file dan path folder]**
+
+**c. Identifikasi IP pengirim dan penerima**
+
+Diambil dari field **Source** dan **Destination** pada paket-paket SMB terkait.
+
+#### Hasil Temuan
+
+| Item                         | Nilai                      |
+| ---------------------------- | -------------------------- |
+| Protokol yang dieksploitasi  | SMB2                       |
+| IP Pengirim                  | `10.7.3.100`               |
+| IP Penerima                  | `10.7.1.50`                |
+| Folder tujuan penyimpanan    | `system32`                 |
+| Nama file executable malware | `wired_trojan_payload.exe` |
+
+#### Validasi Temuan
+
+```bash
+nc 10.4.89.246 3405
+```
+
+#### Kesimpulan
+
+Protokol SMB, yang umum digunakan untuk berbagi file dalam jaringan lokal, dapat dimanfaatkan sebagai vektor distribusi malware apabila tidak diamankan dengan baik. Analisis packet capture menunjukkan bahwa seluruh proses transfer file — mulai dari koneksi ke share, pembuatan file, hingga penulisan data — dapat direkonstruksi secara lengkap.
+
+### Soal 19
+
+Eiri meneror jaringan dengan mengirimkan email pemerasan melalui protokol SMTP tanpa enkripsi. Analisis file capture wired_smtp_threat.pcap pada stream TCP terkait, identifikasi alamat email korban yang ditargetkan, password korban yang diklaim bocor oleh penyerang, jenis malware yang diinfeksikan, batas waktu (dalam hari) yang diberikan, serta MailClientID yang tercantum pada pesan. Validasi temuan kalian pada socket server: ([link file](https://drive.google.com/drive/folders/1RAW0cMoGDDStPyFHeJ_0t9kkoLGBsCmH?usp=sharing)) nc [IP_Group] 3406
+
+#### Metodologi Analisis
+
+**a. Identifikasi sesi SMTP**
+
+Filter:
+
+```
+smtp
+```
+
+Dicari koneksi TCP yang mengandung perintah `DATA`, menandakan dimulainya pengiriman isi (body) email.
+
+**b. Rekonstruksi isi email**
+
+Klik kanan pada salah satu paket dalam TCP stream tersebut, pilih **Follow → TCP Stream**, untuk membaca keseluruhan isi email secara lengkap dalam format yang mudah dibaca.
+
+> **[Catatan: sisipkan screenshot jendela Follow TCP Stream yang menampilkan isi email lengkap]**
+
+**c. Identifikasi detail isi email**
+
+Dari hasil Follow TCP Stream, diidentifikasi:
+
+- Alamat email tujuan pada header `To:`
+- Klaim password yang bocor dalam isi pesan
+- Jenis malware yang disebutkan
+- Batas waktu (dalam hari) yang diberikan
+- Header kustom `MailClientID:`
+
+#### Hasil Temuan
+
+| Item                            | Nilai                    |
+| ------------------------------- | ------------------------ |
+| Alamat email korban             | `victim@protocol7.co.jp` |
+| Password yang diklaim bocor     | `pr0tocol_7_user`        |
+| Jenis malware yang diinfeksikan | `ransomware`             |
+| Batas waktu yang diberikan      | `3 hari`                 |
+| MailClientID                    | `7719980706`             |
+
+#### Validasi Temuan
+
+```bash
+nc 10.4.89.246 3406
+```
+
+#### Kesimpulan
+
+Protokol SMTP tanpa enkripsi (STARTTLS) memungkinkan seluruh isi email — termasuk header kustom dan konten pesan sensitif — dapat dibaca secara langsung oleh siapa pun yang mampu menyadap lalu lintas jaringan, sebagaimana dibuktikan melalui rekonstruksi lengkap isi email ancaman pada analisis ini.
+
+### Soal 20
+
+Untuk rencana pamungkasnya, Eiri menyembunyikan komunikasi malware di balik saluran terenkripsi TLS. Namun Alice telah menyediakan file keylog untuk mendekripsi lalu lintas data tersebut. Analisis file capture wired_tls_decrypt.pcapng bersama keyslogfile.txt untuk mengidentifikasi versi protokol TLS yang dinegosiasikan, nama domain (SNI) yang diakses, alamat IP server HTTPS penyerang, User-Agent yang digunakan, serta HTTP request method dan path yang tersembunyi di dalam sesi dekripsi. Validasi temuan kalian pada socket server: ([link file](https://drive.google.com/file/d/1F7xN3ydIrA-pZaCb32MGseVeHKt-D_qZ/view?usp=sharing)) nc [IP_Group] 3407
+
+#### Metodologi Analisis
+
+**a. Konfigurasi dekripsi TLS pada Wireshark**
+
+Melalui menu **Edit → Preferences → Protocols → TLS**, field **(Pre)-Master-Secret log filename** diarahkan ke file `keyslogfile.txt` yang telah diunduh.
+
+> **[Catatan: sisipkan screenshot halaman Preferences TLS yang menunjukkan file keylog telah dimuat]**
+
+**b. Identifikasi versi protokol TLS dan SNI**
+
+File `wired_tls_decrypt.pcapng` dibuka, filter diterapkan:
+
+```
+tls.handshake.type == 1
+```
+
+Pada paket **Client Hello**, terlihat nama server dan versinya serta SNI.
+
+> **[Catatan: sisipkan screenshot Packet Details Client Hello yang menampilkan Version dan Server Name Indication]**
+
+**c. Identifikasi konten HTTP yang tersembunyi dalam sesi terdekripsi**
+
+Filter diubah ke:
+
+```
+http
+```
+
+Dengan keylog yang sudah dimuat, Wireshark secara otomatis mendekripsi traffic HTTPS sehingga dapat ditampilkan sebagai HTTP biasa. Diperiksa header **User-Agent**, serta method dan path pada request line.
+
+> **[Catatan: sisipkan screenshot Packet Details request HTTP yang telah terdekripsi, menampilkan method, path, dan User-Agent]**
+
+**d. Identifikasi IP server**
+
+Diambil dari field **Destination** pada paket-paket HTTP yang telah terdekripsi.
+
+#### Hasil Temuan
+
+| Item                             | Nilai             |
+| -------------------------------- | ----------------- |
+| Versi protokol TLS               | `TLSv1.2`         |
+| Domain (SNI) yang diakses        | `example.com`     |
+| Alamat IP server HTTPS penyerang | `93.184.216.34`   |
+| User-Agent                       | `curl/7.62.0`     |
+| HTTP Request Method+Path         | `HEAD / HTTP/1.1` |
+
+#### Validasi Temuan
+
+```bash
+nc 10.4.89.246 3407
+```
+
+#### Kesimpulan
+
+Meskipun TLS dirancang untuk mengenkripsi seluruh komunikasi HTTP, ketersediaan file keylog (SSLKEYLOGFILE) memungkinkan pihak yang berwenang — atau dalam konteks forensik keamanan — untuk mendekripsi dan menganalisis isi komunikasi tersebut secara penuh. Hal ini menegaskan bahwa keamanan TLS bergantung sepenuhnya pada kerahasiaan kunci sesi, dan analisis ini membuktikan bahwa struktur data di balik enkripsi TLS pada dasarnya identik dengan HTTP biasa yang dibungkus lapisan kriptografi.
