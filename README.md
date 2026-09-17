@@ -421,3 +421,212 @@ Gak ada packet loss (0%), RTT stabil di kisaran 0.4-1.06 ms, artinya koneksi ke 
 
 - kesusahan dalam menemukan config yang tepat pada saat nomor 7
 - kurang familiar untuk bagaimana setup gns yang bisa nyambung dengan wireshark terkait
+
+### Soal 11
+
+Buktikan kelemahan protokol Telnet dengan membuat akun phantom_user dan password wired_ghost pada layanan telnetd di node Chisa. Lakukan login Telnet dari node Eiri ke node Chisa dan tangkap sesi menggunakan Wireshark. Tunjukkan kredensial plain text melalui fitur Follow TCP Stream, serta jelaskan mengapa setiap karakter terkirim dalam paket TCP terpisah.
+
+#### Topologi & Skenario
+
+Simulasi mengacu pada studi kasus Serial Experiments Lain: Eiri (penyerang) mencoba mengakses layanan Telnet yang berjalan pada node Chisa menggunakan akun uji phantom_user. Traffic antara kedua node melewati Router (Lain) karena keduanya berada pada subnet/switch yang berbeda.
+
+Node	Peran	IP :
+Chisa	Telnet Server	192.229.2.2
+Eiri	Telnet Client	192.229.3.3
+
+#### Konfigurasi Server (Node Chisa)
+
+Layanan telnetd diinstal menggunakan paket busybox-extras pada image Alpine (alpinet), dan akun pengujian dibuat menggunakan paket shadow:
+
+```bash
+apk update
+apk add busybox-extras
+apk add shadow
+useradd -m phantom_user
+echo "phantom_user:wired_ghost" | chpasswd
+telnetd
+```
+
+Verifikasi service berjalan pada port 23:
+
+```bash
+netstat -tuln | grep 23
+```
+
+Hasil:
+```tcp6       0      0 :::23                   :::*                    LISTEN
+
+#### Persiapan Client (Node Eiri)
+
+Paket busybox-extras diinstal untuk menyediakan Telnet client, kemudian dilakukan pengujian konektivitas dasar menggunakan ICMP sebelum melakukan koneksi Telnet:
+
+```sh
+ping -c 3 192.229.2.2
+```
+
+Hasil menunjukkan konektivitas jaringan berfungsi normal dengan 0% packet loss:
+
+3 packets transmitted, 3 received, 0% packet loss, time 2224ms
+rtt min/avg/max/mdev = 0.819/0.852/0.900/0.034 ms
+
+#### Proses Capture
+
+Capture dilakukan menggunakan fitur Start capture pada link GNS3 yang menghubungkan Switch2–Chisa (eth0), sehingga seluruh traffic menuju node Chisa dapat ditangkap secara langsung sebelum sesi Telnet dimulai.
+
+Setelah capture aktif, koneksi Telnet dijalankan dari node Eiri:
+
+```sh
+telnet 192.229.2.2
+```
+
+Login dilakukan menggunakan kredensial:
+
+login: phantom_user
+Password: wired_ghost
+
+Hasil capture awal menunjukkan traffic dengan protokol TELNET terdeteksi otomatis oleh Wireshark, ditandai dengan banyaknya paket berukuran kecil (2–13 bytes) yang merepresentasikan pengiriman data per karakter, diselingi beberapa paket ARP (ARP Request/Reply) sebagai proses resolusi alamat MAC sebelum komunikasi TCP dimulai.
+
+[Catatan: sisipkan screenshot Wireshark Packet List — tampilan awal capture sebelum filter, menunjukkan mix TCP/TELNET/ARP]
+
+6. Penerapan Display Filter
+
+Untuk memfokuskan analisis hanya pada sesi Telnet, diterapkan display filter:
+
+`tcp.port == 23`
+
+Filter berhasil menyaring 34 dari 36 paket total (94.4%), membuang 2 paket ARP yang tidak relevan dengan sesi Telnet.
+
+[Catatan: sisipkan screenshot Packet List setelah filter tcp.port == 23 diterapkan]
+
+Pada tahap awal koneksi, terlihat proses negosiasi opsi Telnet (Telnet option negotiation) antara client dan server, seperti:
+
+```
+Do Echo, Do Negotiate About Window Size, Will Echo, Will Suppress Go Ahead
+Won't Echo, Will Negotiate About Window Size, Do Suppress Go Ahead
+```
+
+Negosiasi ini merupakan bagian dari protokol Telnet untuk menyepakati mode terminal (echo, window size, dsb.) sebelum sesi interaktif dimulai.
+
+#### Follow TCP Stream — Bukti Kredensial Plaintext
+
+Untuk merekonstruksi keseluruhan isi sesi komunikasi, dilakukan `Follow → TCP Stream` pada salah satu paket TELNET. Hasil rekonstruksi menampilkan seluruh isi percakapan dalam bentuk teks yang mudah dibaca:
+
+[Catatan: sisipkan screenshot jendela Follow TCP Stream yang menampilkan phantom_user dan wired_ghost — ini adalah bukti utama laporan]
+
+Dari hasil ini terbukti bahwa kredensial login (phantom_user dan wired_ghost) terkirim dalam bentuk plain text, dapat dibaca langsung tanpa proses dekripsi apapun oleh siapa pun yang mampu menyadap traffic jaringan.
+
+#### Analisis: Mengapa tiap Karakter Terkirim dalam Paket TCP Terpisah
+
+Berdasarkan pengamatan pada Packet List, terlihat pola paket-paket kecil (payload 1–2 byte) yang dikirim berurutan alih-alih satu paket besar berisi seluruh kata. Hal ini disebabkan oleh karakteristik operasional protokol Telnet:
+
+- Character Mode (bukan Line Mode) : Telnet secara default beroperasi dalam mode karakter, di mana setiap penekanan tombol oleh user langsung dikirimkan ke server secara individual tanpa menunggu buffer baris penuh atau tombol Enter ditekan.
+- Tidak Ada Local Echo : Karena client tidak menampilkan karakter secara lokal, server harus melakukan remote echo dengan mengirim balik setiap karakter yang diterima agar dapat ditampilkan di layar client. Hal ini menghasilkan traffic dua arah untuk setiap karakter (client→server, lalu server→client).
+- Tidak Ada Negosiasi Line Buffering : Opsi LINEMODE yang memungkinkan pengiriman per-baris jarang diaktifkan pada implementasi Telnet sederhana seperti telnetd bawaan BusyBox, sehingga default yang digunakan tetap character-by-character.
+
+Akibatnya, kata seperti phantom_user (12 karakter) menghasilkan setidaknya 12 paket kirim + 12 paket echo balik, yang terlihat jelas sebagai rangkaian paket kecil berurutan pada Packet List Wireshark.
+
+Temuan ini menegaskan bahwa protokol Telnet tidak layak digunakan pada jaringan produksi atau jaringan yang tidak sepenuhnya terpercaya, dan sebaiknya digantikan dengan protokol yang mengenkripsi seluruh sesi komunikasi seperti SSH.
+
+### Soal 12
+
+Alice mencurigai Knights menjalankan beberapa layanan rahasia di node-nya. Lakukan pemindaian port dari node Alice ke node Knights menggunakan Netcat (nc) untuk memeriksa port 22 (SSH) dan 80 (HTTP) dalam keadaan terbuka, serta port rahasia 7777 dalam keadaan tertutup. Analisis di Wireshark perbedaan TCP Flag yang dikembalikan antara port terbuka (SYN-ACK) dengan port tertutup (RST-ACK).
+
+#### Topologi & Skenario
+Simulasi mengacu pada studi kasus *Serial Experiments Lain*: Alice mencurigai adanya layanan tersembunyi pada node Knights, lalu melakukan pemindaian terhadap tiga port sekaligus: dua port umum (SSH/HTTP) dan satu port rahasia.
+
+| Node | Peran | IP |
+|---|---|---|
+| Knights | Target scan | 192.229.3.2 |
+| Alice | Penyerang / pemindai | (sesuai IP node Alice) |
+
+#### Konfigurasi Target (Node Knights)
+
+Dua listener disiapkan menggunakan `netcat-openbsd` untuk mensimulasikan port dalam keadaan terbuka pada port 22 dan 80, sementara port 7777 sengaja dibiarkan tanpa proses apapun agar tetap tertutup:
+
+```bash
+apk update
+apk add netcat-openbsd
+
+nc -lk -p 22 &
+nc -lk -p 80 &
+```
+
+Verifikasi kedua listener aktif:
+```bash
+netstat -tuln | grep -E '22|80'
+```
+
+> **[Catatan: sisipkan screenshot terminal Knights yang menampilkan output `netstat` di atas]**
+
+Port 7777 tidak dikonfigurasi apapun, sehingga secara default berada dalam keadaan tertutup di level kernel.
+
+#### Persiapan Alat Pemindai (Node Alice)
+
+```bash
+apk update
+apk add netcat-openbsd
+```
+
+#### Proses Capture
+
+Capture diaktifkan pada link GNS3 yang menghubungkan node Knights ke switch-nya, dilakukan **sebelum** proses scanning dijalankan agar seluruh proses handshake dapat tertangkap sepenuhnya.
+
+#### Eksekusi Port Scan
+
+Dari node Alice, dilakukan pemindaian terhadap ketiga port menggunakan Netcat dengan opsi `-vz` (verbose, zero-I/O mode):
+
+```bash
+nc -vz 192.229.3.2 22
+nc -vz 192.229.3.2 80
+nc -vz 192.229.3.2 7777
+```
+
+Hasil eksekusi:
+```
+Alice:~# nc -vz 192.229.3.2 22
+Connection to 192.229.3.2 22 port [tcp/ssh] succeeded!
+Alice:~# nc -vz 192.229.3.2 80
+Connection to 192.229.3.2 80 port [tcp/http] succeeded!
+Alice:~# nc -vz 192.229.3.2 7777
+nc: connect to 192.229.3.2 port 7777 (tcp) failed: Connection refused
+```
+
+> **[Catatan: sisipkan screenshot terminal Alice yang menampilkan ketiga hasil scan di atas]**
+
+Hasil menunjukkan port 22 dan 80 berada dalam status **terbuka** (`succeeded`), sedangkan port 7777 berada dalam status **tertutup** (`Connection refused`), sesuai dengan konfigurasi yang telah dipersiapkan pada node Knights.
+
+#### Analisis pada Wireshark
+
+Capture dihentikan setelah proses scanning selesai, kemudian disimpan sebagai `no-12.pcapng`. Display filter diterapkan untuk memfokuskan analisis pada ketiga port yang diuji:
+
+```
+tcp.port == 22 or tcp.port == 80 or tcp.port == 7777
+```
+
+> **[Catatan: sisipkan screenshot Packet List Wireshark setelah filter diterapkan]**
+
+**Untuk port 22 dan 80 (kondisi terbuka),** rangkaian paket menunjukkan proses TCP three-way handshake yang berhasil diselesaikan:
+```
+Alice   → Knights   [SYN]
+Knights → Alice     [SYN, ACK]
+Alice   → Knights   [ACK]
+```
+diikuti dengan paket `[FIN, ACK]` karena mode `-z` pada Netcat langsung menutup koneksi setelah verifikasi konektivitas berhasil.
+
+> **[Catatan: sisipkan screenshot/detail paket yang menunjukkan flag `[SYN, ACK]` dari Knights untuk port 22 atau 80]**
+
+**Untuk port 7777 (kondisi tertutup),** handshake tidak pernah selesai. Paket yang terekam hanya:
+```
+Alice   → Knights   [SYN]
+Knights → Alice     [RST, ACK]
+```
+
+> **[Catatan: sisipkan screenshot/detail paket yang menunjukkan flag `[RST, ACK]` dari Knights untuk port 7777]**
+
+#### Perbandingan TCP Flag
+
+| Kondisi Port | Flag yang Diterima | Penjelasan |
+|---|---|---|
+| Terbuka (22, 80) | `SYN, ACK` | Terdapat proses (listener) yang bind ke port tersebut dan bersedia menerima koneksi, sehingga kernel merespons dengan melanjutkan proses handshake |
+| Tertutup (7777) | `RST, ACK` | Tidak ada proses yang listen pada port tersebut, sehingga kernel segera menolak permintaan koneksi dengan mengirimkan flag reset (RST) tanpa melanjutkan handshake |
+
