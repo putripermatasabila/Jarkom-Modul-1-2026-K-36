@@ -256,70 +256,94 @@ dns or icmp
 
 ![](images/no-6.jpeg)
 
-### Soal 7
+## Soal 7
 
-Pada soal 7 Chisa mendirikan FTP Server dengan shared folder `/var/wired/data`. Kebijakan aksesnya, alice dapat read dan write, mika dibatasi read-only, eiri dibatasi tanpa izin akses sama sekali.
+Chisa mendirikan FTP Server dengan shared folder `/var/wired/data`. Kebijakan aksesnya, alice dapat read dan write, mika dibatasi read-only, eiri dibatasi tanpa izin akses sama sekali.
 
-Bikin folder shared dulu:
+Daripada jalanin command satu-satu manual, semua step digabung jadi satu file `setup_ftp.sh` biar tinggal dieksekusi sekali jalan.
+
+Isi `setup_ftp.sh`:
 
 ```sh
+#!/bin/sh
+
+echo "[0/10] Membersihkan sisa konfigurasi sebelumnya (jika ada)..."
+pkill vsftpd 2>/dev/null
+deluser alice 2>/dev/null
+deluser mika 2>/dev/null
+deluser eiri 2>/dev/null
+delgroup ftpaccess 2>/dev/null
+rm -rf /var/wired/data
+rm -rf /etc/vsftpd/user_conf
+rm -f /etc/vsftpd.userlist
+
+check_error() {
+    if [ $? -ne 0 ]; then
+        echo "[GAGAL] $1"
+        exit 1
+    fi
+}
+
+echo "[1/10] Membuat folder shared..."
 mkdir -p /var/wired/data
-chown root:root /var/wired/data
-```
+check_error "Gagal membuat direktori /var/wired/data"
 
-Bikin 3 user OS yang bakal jadi akun FTP:
-
-```sh
+echo "[2/10] Membuat user OS (alice, mika, eiri)..."
 adduser -D alice
+check_error "Gagal membuat user alice"
+echo "alice:alice1234" | chpasswd
+check_error "Gagal set password alice"
+
 adduser -D mika
+check_error "Gagal membuat user mika"
+echo "mika:mika1234" | chpasswd
+check_error "Gagal set password mika"
+
 adduser -D eiri
-```
+check_error "Gagal membuat user eiri"
+echo "eiri:eiri1234" | chpasswd
+check_error "Gagal set password eiri"
 
-Install tools yang dibutuhin, termasuk `shadow` supaya `usermod` bisa dipakai:
-
-```sh
+echo "[3/10] Menginstal packages..."
 apk update
-apk add shadow
-apk add vsftpd
-```
+check_error "Gagal update apk"
+apk add shadow vsftpd
+check_error "Gagal menginstal shadow dan vsftpd"
 
-Bikin grup akses khusus, alice dan mika dimasukin ke grup ini:
-
-```sh
+echo "[4/10] Konfigurasi grup ftpaccess..."
 addgroup ftpaccess
+check_error "Gagal membuat grup ftpaccess"
 adduser alice ftpaccess
+check_error "Gagal memasukkan alice ke grup ftpaccess"
 adduser mika ftpaccess
-```
+check_error "Gagal memasukkan mika ke grup ftpaccess"
 
-Arahin home directory ketiga user ke folder shared:
-
-```sh
+echo "[5/10] Mengarahkan home directory..."
 usermod -d /var/wired/data alice
+check_error "Gagal memodifikasi home directory alice"
 usermod -d /var/wired/data mika
+check_error "Gagal memodifikasi home directory mika"
 usermod -d /var/wired/data eiri
-```
+check_error "Gagal memodifikasi home directory eiri"
 
-```sh
+echo "[6/10] Mengatur ownership & permission folder..."
 chown root:ftpaccess /var/wired/data
-chmod 770 /var/wired/data
-```
+check_error "Gagal mengatur ownership root:ftpaccess"
+chmod 775 /var/wired/data
+check_error "Gagal mengatur chmod 775"
 
-Whitelist alice dan mika di userlist, otomatis eiri keblacklist karena gak masuk daftar:
+echo "[7/10] Mengatur whitelist user..."
+printf "alice\nmika\n" > /etc/vsftpd.userlist
+check_error "Gagal membuat file /etc/vsftpd.userlist"
 
-```sh
-echo -e "alice\nmika" > /etc/vsftpd.userlist
-```
-
-Setting read-only khusus buat mika:
-
-```sh
+echo "[8/10] Konfigurasi read-only untuk mika..."
 mkdir -p /etc/vsftpd/user_conf
+check_error "Gagal membuat direktori /etc/vsftpd/user_conf"
 echo "write_enable=NO" > /etc/vsftpd/user_conf/mika
-```
+check_error "Gagal membuat file konfigurasi khusus mika"
 
-Isi `/etc/vsftpd.conf`:
-
-```sh
+echo "[9/10] Menulis konfigurasi /etc/vsftpd.conf..."
+cat <<EOF > /etc/vsftpd.conf
 listen=YES
 anonymous_enable=NO
 local_enable=YES
@@ -336,15 +360,33 @@ pasv_min_port=30000
 pasv_max_port=30100
 file_open_mode=0666
 local_umask=002
+EOF
+check_error "Gagal menulis konfigurasi /etc/vsftpd.conf"
+
+echo "[10/10] Menjalankan vsftpd..."
+vsftpd /etc/vsftpd.conf &
+sleep 1
+ps aux | grep vsftpd | grep -v grep
+if [ $? -ne 0 ]; then
+    echo "[GAGAL] vsftpd tidak berhasil start"
+    exit 1
+fi
+
+echo "[SELESAI] Semua konfigurasi berhasil dijalankan, vsftpd sudah jalan."
 ```
 
-Jalankan servernya:
+Jalankan:
 
 ```sh
-vsftpd /etc/vsftpd.conf &
+chmod +x setup_ftp.sh
+./setup_ftp.sh
 ```
 
-Hasil testing pakai lftp menunjukkan user alice bisa melakukan put, get, dan ls karena punya akses penuh, user mika bisa get tapi gagal put karena `write_enable=NO`, sedangkan user eiri gagal login sama sekali sehingga semua command tidak bisa dijalankan.
+### Penjelasan kebijakan akses yang diterapkan
+
+- **alice** → anggota grup `ftpaccess`, folder `775` (grup dapat rwx) → bisa read & write
+- **mika** → anggota grup `ftpaccess`, tapi punya config khusus `/etc/vsftpd/user_conf/mika` isi `write_enable=NO` → read-only, meskipun secara permission folder dia rwx
+- **eiri** → tidak dimasukkan ke grup `ftpaccess` dan tidak ada di `/etc/vsftpd.userlist` (whitelist) → login langsung ditolak, tanpa izin akses sama sekali
 
 #### Output
 
@@ -416,11 +458,6 @@ Gak ada packet loss (0%), RTT stabil di kisaran 0.4-1.06 ms, artinya koneksi ke 
 ![](<images/no-10(1).png>)
 
 ---
-
-### Kendala saat mengerjakan
-
-- kesusahan dalam menemukan config yang tepat pada saat nomor 7
-- kurang familiar untuk bagaimana setup gns yang bisa nyambung dengan wireshark terkait
 
 ### Soal 11
 
@@ -1210,3 +1247,9 @@ nc 10.4.89.246 3407
 #### Kesimpulan
 
 Meskipun TLS dirancang untuk mengenkripsi seluruh komunikasi HTTP, ketersediaan file keylog (SSLKEYLOGFILE) memungkinkan pihak yang berwenang atau dalam konteks forensik keamanan untuk mendekripsi dan menganalisis isi komunikasi tersebut secara penuh. Hal ini menegaskan bahwa keamanan TLS bergantung sepenuhnya pada kerahasiaan kunci sesi, dan analisis ini membuktikan bahwa struktur data di balik enkripsi TLS pada dasarnya identik dengan HTTP biasa yang dibungkus lapisan kriptografi.
+
+### Kendala saat mengerjakan
+
+- Stuck lama pada saat mengerjakan nomor 7, haru berkali-kali dalam menyesuaikan config, kemudian mengubah akses tiap user sesuai pada soal
+- Kurang familiar untuk bagaimana setup gns yang bisa terintegrasi dengan wireshark terkait
+- GNS Project sempat 409 conflict menyebabkan tidak bisa mengerjakan sebentar, tetapi unutngnya project tidak hilang
