@@ -700,132 +700,79 @@ Knights	SSH Server	192.229.3.2
 Mika	SSH Client (user: mika_admin)	192.229.1.3
 ```
 
-#### Instalasi dan Konfigurasi SSH Server (Node Knights)
+#### Konfigurasi SSH Server (Node Knights)
 
-```bash
+Disimpan sebagai `/root/ssh_setup.sh` agar persisten:
+
+```sh
+#!/bin/sh
 apk update
 apk add openssh
+
+adduser -D -s /bin/ash mika_admin
+echo "mika_admin:mikaadmin" | chpasswd
+
 ssh-keygen -A
-passwd root
+mkdir -p /home/mika_admin/.ssh
+chmod 700 /home/mika_admin/.ssh
+chown -R mika_admin:mika_admin /home/mika_admin/.ssh
+
+sed -i '/^#*PubkeyAuthentication /d;/^#*PasswordAuthentication /d;/^#*PermitRootLogin /d' /etc/ssh/sshd_config
+cat >> /etc/ssh/sshd_config <<EOF
+PubkeyAuthentication yes
+PasswordAuthentication yes
+PermitRootLogin no
+EOF
+
+pkill sshd
 /usr/sbin/sshd
 ```
 
-Verifikasi service berjalan pada port 22:
+Setelah public key ditempel ke authorized_keys milik mika_admin, PasswordAuthentication diubah jadi no:
 
-```bash
-netstat -tuln | grep 22
-tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN
-tcp6       0      0 :::22                   :::*                    LISTEN
+```
+sed -i 's/PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+pkill sshd && /usr/sbin/sshd
 ```
 
-Konfigurasi `/etc/ssh/sshd_config` diatur sebagai berikut untuk mengaktifkan autentikasi berbasis public key:
+Konfigurasi akhir `/etc/ssh/sshd_config`:
 
-```conf
-PermitRootLogin yes
+```
 PubkeyAuthentication yes
 PasswordAuthentication no
+PermitRootLogin no
 ```
 
-#### Generate Keypair SSH (Node Mika)
+**Generate Keypair (Node Mika)**
 
-Instalasi SSH client dan pembuatan user khusus:
-
-```bash
-apk add openssh-client shadow
-useradd -m mika_admin
-passwd mika_admin
-su - mika_admin
+```sh
+apk add openssh-client
+ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
 ```
 
-Generate RSA keypair 2048-bit:
+[SCREENSHOT 13-B: output ssh-keygen di Mika]
 
-```bash
-ssh-keygen -t rsa -b 2048
-```
+Public key hasil generate ditempel manual ke /home/mika_admin/.ssh/authorized_keys di Knights.
 
-Hasil:
+Mulai capture sebelum menjalankan dibawah ini :
 
-```
-Your identification has been saved in /home/mika_admin/.ssh/id_rsa
-Your public key has been saved in /home/mika_admin/.ssh/id_rsa.pub
-The key fingerprint is:
-SHA256:Iojs0aNTCqtaoHkiC7YDPPKYLFeAeEGLfs/SAkf3liE mika_admin@Mika
-```
+```ssh mika_admin@192.229.3.4```
 
-#### Distribusi Public Key ke Server
+Koneksi langsung masuk shell Knights tanpa diminta password sama sekali, membuktikan public key authentication berfungsi.
 
-Isi public key ditampilkan di Mika:
+[SCREENSHOT 13-D: login SSH sukses tanpa password]
 
-```bash
-cat ~/.ssh/id_rsa.pub
-```
+**Analisis Wireshark**
 
-Kemudian ditambahkan secara manual ke file `authorized_keys` pada node Knights:
-
-```bash
-mkdir -p /root/.ssh
-nano /root/.ssh/authorized_keys    # paste isi public key
-chmod 700 /root/.ssh
-chmod 600 /root/.ssh/authorized_keys
-```
-
-#### Proses Capture dan Koneksi SSH
-
-![13-0](images/13-wireshark.png)
-
-Capture dimulai pada link antara Switch1–Mika (eth0) sebelum koneksi SSH dijalankan, untuk memastikan seluruh fase handshake tertangkap. Koneksi dilakukan dari user mika_admin di Mika:
-
-```bash
-ssh -v root@192.229.3.2
-```
-
-Koneksi berhasil dan langsung masuk ke shell Knights tanpa diminta password sama sekali, membuktikan autentikasi berbasis public key berfungsi dengan benar.
-
-#### Analisis Wireshark
-
-Display filter yang digunakan:
+Display filter:
 
 `tcp.port==22`
 
-Hasil capture menunjukkan urutan lengkap fase komunikasi SSH sebagai berikut:
+[SCREENSHOT 13-E: Packet List hasil filter]
 
-![13-1](images/13-filter-tcp-port.png)
+#### Mengapa Kredensial Tidak Terlihat Plaintext seperti Telnet
 
-##### 13.1 Identifikasi Protocol Version Exchange
-
-Paket No. 6 (Server: Protocol) di-expand pada bagian SSH Protocol, menampilkan isi plaintext:
-
-```Protocol: SSH-2.0-OpenSSH_10.2
-[Direction: Server to Client]
-```
-
-![13-2](images/13-plaintext-no-6.png)
-![13-3](images/13-plaintext-ssh.png)
-
-Ini adalah satu-satunya bagian dari sesi SSH yang dikirim dalam bentuk plaintext, karena kedua pihak perlu saling mengetahui versi protokol yang didukung sebelum proses enkripsi dapat dinegosiasikan.
-
-##### 13.2 Identifikasi Key Exchange
-
-Pada paket No. 9, 11 dan 12 terlihat proses negosiasi algoritma kriptografi (Key Exchange Init), dilanjutkan dengan PQ/T Hybrid Key Exchange, sebuah skema Diffie-Hellman modern yang menggabungkan algoritma tradisional dengan algoritma tahan-kuantum (post-quantum) untuk keamanan tambahan terhadap ancaman komputasi kuantum di masa depan.
-
-Setelah paket "New Keys" pada No. 13, seluruh komunikasi berikutnya (termasuk proses autentikasi user) berubah menjadi Encrypted packet yang tidak dapat dibaca isinya sama sekali oleh pihak ketiga.
-
-#### Perbandingan dengan Telnet
-
-| Aspek                 | Telnet                                                      | SSH                                               |
-| --------------------- | ----------------------------------------------------------- | ------------------------------------------------- |
-| Kredensial saat login | Plaintext, terbaca langsung (`phantom_user`, `wired_ghost`) | Tidak pernah dikirim, private key tetap di client |
-| Isi sesi komunikasi   | Seluruhnya plaintext                                        | Terenkripsi setelah Key Exchange                  |
-| Follow TCP Stream     | Menampilkan teks percakapan lengkap                         | Menampilkan data biner/acak (tidak terbaca)       |
-| Bagian yang plaintext | Seluruh sesi                                                | Hanya Protocol Version Exchange                   |
-
-#### Analisis
-
-Kredensial Tidak Terlihat Plaintext seperti Telnet Key Exchange (Diffie-Hellman Hybrid) dilakukan di awal sesi untuk menyepakati session key rahasia antara client dan server, tanpa pernah mengirim kunci privat melalui jaringan, kedua pihak menghitung shared secret yang sama secara independen berdasarkan pertukaran nilai publik.
-Setelah Key Exchange selesai (ditandai paket "New Keys"), seluruh komunikasi berikutnya dienkripsi menggunakan algoritma simetris yang telah disepakati.
-
-Karena autentikasi menggunakan public key, private key milik mika_admin tidak pernah dikirim melalui jaringan sama sekali. Proses yang terjadi adalah server mengirimkan challenge yang harus ditandatangani secara digital oleh private key di sisi client, dan hanya hasil tanda tangan (signature) tersebut yang dikirim balik ke server untuk diverifikasi menggunakan public key yang telah terdaftar di authorized_keys.
-Hal ini kontras total dengan Telnet, yang mengirimkan setiap karakter kredensial secara langsung tanpa perlindungan enkripsi apapun.Pengujian ini membuktikan bahwa SSH dengan autentikasi berbasis public key memberikan tingkat keamanan jauh lebih tinggi dibandingkan Telnet.
+Private key Ed25519 milik mika_admin yang tersimpan di Mika tidak pernah dikirim melalui jaringan. Server mengirim challenge yang ditandatangani secara digital oleh private key di client, dan hanya hasil tanda tangan (signature) yang dikirim balik untuk diverifikasi memakai public key di authorized_keys. Ini kontras dengan Telnet yang mengirim tiap karakter kredensial (phantom_user/wired_ghost) langsung tanpa enkripsi, terbaca utuh lewat Follow TCP Stream, membuktikan SSH dengan public key authentication jauh lebih aman.
 
 ### Soal 14
 
