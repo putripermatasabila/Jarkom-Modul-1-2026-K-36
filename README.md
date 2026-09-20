@@ -405,7 +405,7 @@ lftp alice@192.229.2.2
 put knights_report.txt
 ```
 
-Analisis dari Follow TCP Stream di Wireshark:
+Analisis dari Wireshark:
 
 - Login: `USER alice` → `331 Please specify the password.` → `PASS ...` → `230 Login successful.`
 - Mode binary: `TYPE I`
@@ -414,7 +414,7 @@ Analisis dari Follow TCP Stream di Wireshark:
 
 #### Output
 
-![](images/no-9.png)
+![](images/no-8.png)
 
 ---
 
@@ -439,23 +439,47 @@ Terbukti mika bisa `get` tapi kena `550 Permission denied` pas `put`, sesuai `wr
 
 ### Soal 10
 
-Soal 10 minta Knights ping ke Chisa buat uji latensi, payload 128 byte, interval 0.3 detik, sebanyak 77 paket.
+Knights melancarkan uji ketahanan koneksi ke server Chisa untuk menguji latensi jaringan The Wired. Payload 128 bytes, interval 0.3 detik, sebanyak 77 paket.
 
 ```sh
 ping -c 77 -s 128 -i 0.3 192.229.2.2
 ```
 
-Di Wireshark, tiap Echo Request (ICMP Type 8, Code 0) dibales Echo Reply (ICMP Type 0, Code 0) dengan id dan seq yang sama, TTL request 63 dan reply 64 (beda karena lewat hop yang beda).
+#### Analisis Wireshark: ICMP Type dan Code
 
-Hasil statistik:
+Filter yang dipakai:
+
+```
+icmp
+```
+
+**Echo Request** punya `Type: 8, Code: 0`, sedangkan **Echo Reply** punya `Type: 0, Code: 0`.
+
+![](images/echo-request.png>)
+![](images/echo-reply.png>)
+
+Di paket Echo Reply, ada informasi tambahan `[Response time: 0.123 ms]`, yaitu jarak waktu antara paket Echo Request dikirim dan Echo Reply-nya diterima balik. Ini yang jadi dasar perhitungan RTT.
+
+#### Analisis packet loss dan RTT
+
+Hasil dari ringkasan ping di terminal:
 
 ![](<images/no-10(2).png>)
 
-Gak ada packet loss (0%), RTT stabil di kisaran 0.4-1.06 ms, artinya koneksi ke server Chisa lancar.
+```
+--- 192.229.2.2 ping statistics ---
+77 packets transmitted, 77 received, 0% packet loss, time 25671ms
+rtt min/avg/max/mdev = 0.409/0.622/1.060/0.128 ms
+```
 
-#### Output
+![](<images/no-10(2).png>)
 
-![](<images/no-10(1).png>)
+- **Packet loss**: 0%, semua 77 paket yang dikirim berhasil dibalas, ga ada yang hilang
+- **RTT min**: 0.409 ms
+- **RTT avg**: 0.622 ms
+- **RTT max**: 1.060 ms
+
+RTT sendiri adalah waktu round-trip tiap paket, dari saat Echo Request dikirim sampai Echo Reply-nya diterima kembali. Karena dikirim 77 paket, RTT tiap paket dirangkum jadi tiga nilai (min, avg, max) buat ngeliat rentang performanya. Hasilnya stabil di kisaran sub-milidetik, menandakan koneksi Knights ke Chisa lancar tanpa hambatan.
 
 ---
 
