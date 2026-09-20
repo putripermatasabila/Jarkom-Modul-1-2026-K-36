@@ -1274,6 +1274,8 @@ Meskipun TLS dirancang untuk mengenkripsi seluruh komunikasi HTTP, ketersediaan 
 
 ### Kendala saat mengerjakan
 
-- Stuck lama pada saat mengerjakan nomor 7, haru berkali-kali dalam menyesuaikan config, kemudian mengubah akses tiap user sesuai pada soal
+- Stuck lama pada saat mengerjakan nomor 7, harus berkali-kali dalam menyesuaikan config, kemudian mengubah akses tiap user sesuai pada soal
 - Kurang familiar untuk bagaimana setup gns yang bisa terintegrasi dengan wireshark terkait
 - GNS Project sempat 409 conflict menyebabkan tidak bisa mengerjakan sebentar, tetapi unutngnya project tidak hilang
+- Sempat bingung saat mengerjakan nomor 13 karena tidak otomatis login ke node Knights seperti yang diminta soal. Human error karena kurang teliti dalam mengaktifkan/nonaktifkan autentikasi password.
+  
