@@ -154,7 +154,7 @@ Baris `up echo "nameserver 8.8.8.8" > /etc/resolv.conf` itu bagian dari `/etc/ne
 #### Output
 
 ![](images/ping-8.8.8.8.png)
-![](images/ping-google-alice.png)
+![](images/ping-google-alice.png.png)
 
 ---
 
@@ -189,7 +189,7 @@ Jadi begitu router Lain nyala ulang, `router.sh` langsung nerapin ulang aturan N
 
 #### Output
 
-![](images/no-5.png)
+![](images/no-5.png.png)
 
 ---
 
@@ -258,92 +258,68 @@ dns or icmp
 
 ### Soal 7
 
-Chisa mendirikan FTP Server dengan shared folder `/var/wired/data`. Kebijakan aksesnya, alice dapat read dan write, mika dibatasi read-only, eiri dibatasi tanpa izin akses sama sekali.
+Pada soal 7 Chisa mendirikan FTP Server dengan shared folder `/var/wired/data`. Kebijakan aksesnya, alice dapat read dan write, mika dibatasi read-only, eiri dibatasi tanpa izin akses sama sekali.
 
-Daripada jalanin command satu-satu manual, semua step digabung jadi satu file `setup_ftp.sh` biar tinggal dieksekusi sekali jalan.
-
-Isi `setup_ftp.sh`:
+Bikin folder shared dulu:
 
 ```sh
-#!/bin/sh
-
-echo "[0/10] Membersihkan sisa konfigurasi sebelumnya (jika ada)..."
-pkill vsftpd 2>/dev/null
-deluser alice 2>/dev/null
-deluser mika 2>/dev/null
-deluser eiri 2>/dev/null
-delgroup ftpaccess 2>/dev/null
-rm -rf /var/wired/data
-rm -rf /etc/vsftpd/user_conf
-rm -f /etc/vsftpd.userlist
-
-check_error() {
-    if [ $? -ne 0 ]; then
-        echo "[GAGAL] $1"
-        exit 1
-    fi
-}
-
-echo "[1/10] Membuat folder shared..."
 mkdir -p /var/wired/data
-check_error "Gagal membuat direktori /var/wired/data"
+chown root:root /var/wired/data
+```
 
-echo "[2/10] Membuat user OS (alice, mika, eiri)..."
+Bikin 3 user OS yang bakal jadi akun FTP:
+
+```sh
 adduser -D alice
-check_error "Gagal membuat user alice"
-echo "alice:alice1234" | chpasswd
-check_error "Gagal set password alice"
-
 adduser -D mika
-check_error "Gagal membuat user mika"
-echo "mika:mika1234" | chpasswd
-check_error "Gagal set password mika"
-
 adduser -D eiri
-check_error "Gagal membuat user eiri"
-echo "eiri:eiri1234" | chpasswd
-check_error "Gagal set password eiri"
+```
 
-echo "[3/10] Menginstal packages..."
+Install tools yang dibutuhin, termasuk `shadow` supaya `usermod` bisa dipakai:
+
+```sh
 apk update
-check_error "Gagal update apk"
-apk add shadow vsftpd
-check_error "Gagal menginstal shadow dan vsftpd"
+apk add shadow
+apk add vsftpd
+```
 
-echo "[4/10] Konfigurasi grup ftpaccess..."
+Bikin grup akses khusus, alice dan mika dimasukin ke grup ini:
+
+```sh
 addgroup ftpaccess
-check_error "Gagal membuat grup ftpaccess"
 adduser alice ftpaccess
-check_error "Gagal memasukkan alice ke grup ftpaccess"
 adduser mika ftpaccess
-check_error "Gagal memasukkan mika ke grup ftpaccess"
+```
 
-echo "[5/10] Mengarahkan home directory..."
+Arahin home directory ketiga user ke folder shared:
+
+```sh
 usermod -d /var/wired/data alice
-check_error "Gagal memodifikasi home directory alice"
 usermod -d /var/wired/data mika
-check_error "Gagal memodifikasi home directory mika"
 usermod -d /var/wired/data eiri
-check_error "Gagal memodifikasi home directory eiri"
+```
 
-echo "[6/10] Mengatur ownership & permission folder..."
+```sh
 chown root:ftpaccess /var/wired/data
-check_error "Gagal mengatur ownership root:ftpaccess"
-chmod 775 /var/wired/data
-check_error "Gagal mengatur chmod 775"
+chmod 770 /var/wired/data
+```
 
-echo "[7/10] Mengatur whitelist user..."
-printf "alice\nmika\n" > /etc/vsftpd.userlist
-check_error "Gagal membuat file /etc/vsftpd.userlist"
+Whitelist alice dan mika di userlist, otomatis eiri keblacklist karena gak masuk daftar:
 
-echo "[8/10] Konfigurasi read-only untuk mika..."
+```sh
+echo -e "alice\nmika" > /etc/vsftpd.userlist
+```
+
+Setting read-only khusus buat mika:
+
+```sh
 mkdir -p /etc/vsftpd/user_conf
-check_error "Gagal membuat direktori /etc/vsftpd/user_conf"
 echo "write_enable=NO" > /etc/vsftpd/user_conf/mika
-check_error "Gagal membuat file konfigurasi khusus mika"
+```
 
-echo "[9/10] Menulis konfigurasi /etc/vsftpd.conf..."
-cat <<EOF > /etc/vsftpd.conf
+Isi `/etc/vsftpd.conf`:
+
+```sh
 listen=YES
 anonymous_enable=NO
 local_enable=YES
@@ -360,33 +336,15 @@ pasv_min_port=30000
 pasv_max_port=30100
 file_open_mode=0666
 local_umask=002
-EOF
-check_error "Gagal menulis konfigurasi /etc/vsftpd.conf"
-
-echo "[10/10] Menjalankan vsftpd..."
-vsftpd /etc/vsftpd.conf &
-sleep 1
-ps aux | grep vsftpd | grep -v grep
-if [ $? -ne 0 ]; then
-    echo "[GAGAL] vsftpd tidak berhasil start"
-    exit 1
-fi
-
-echo "[SELESAI] Semua konfigurasi berhasil dijalankan, vsftpd sudah jalan."
 ```
 
-Jalankan:
+Jalankan servernya:
 
 ```sh
-chmod +x setup_ftp.sh
-./setup_ftp.sh
+vsftpd /etc/vsftpd.conf &
 ```
 
-### Penjelasan kebijakan akses yang diterapkan
-
-- **alice** → anggota grup `ftpaccess`, folder `775` (grup dapat rwx) → bisa read & write
-- **mika** → anggota grup `ftpaccess`, tapi punya config khusus `/etc/vsftpd/user_conf/mika` isi `write_enable=NO` → read-only, meskipun secara permission folder dia rwx
-- **eiri** → tidak dimasukkan ke grup `ftpaccess` dan tidak ada di `/etc/vsftpd.userlist` (whitelist) → login langsung ditolak, tanpa izin akses sama sekali
+Hasil testing pakai lftp menunjukkan user alice bisa melakukan put, get, dan ls karena punya akses penuh, user mika bisa get tapi gagal put karena `write_enable=NO`, sedangkan user eiri gagal login sama sekali sehingga semua command tidak bisa dijalankan.
 
 #### Output
 
@@ -405,7 +363,7 @@ lftp alice@192.229.2.2
 put knights_report.txt
 ```
 
-Analisis dari Wireshark:
+Analisis dari Follow TCP Stream di Wireshark:
 
 - Login: `USER alice` → `331 Please specify the password.` → `PASS ...` → `230 Login successful.`
 - Mode binary: `TYPE I`
@@ -414,7 +372,7 @@ Analisis dari Wireshark:
 
 #### Output
 
-![](images/no-8.png)
+![](images/no-9.png)
 
 ---
 
@@ -439,47 +397,30 @@ Terbukti mika bisa `get` tapi kena `550 Permission denied` pas `put`, sesuai `wr
 
 ### Soal 10
 
-Knights melancarkan uji ketahanan koneksi ke server Chisa untuk menguji latensi jaringan The Wired. Payload 128 bytes, interval 0.3 detik, sebanyak 77 paket.
+Soal 10 minta Knights ping ke Chisa buat uji latensi, payload 128 byte, interval 0.3 detik, sebanyak 77 paket.
 
 ```sh
 ping -c 77 -s 128 -i 0.3 192.229.2.2
 ```
 
-#### Analisis Wireshark: ICMP Type dan Code
+Di Wireshark, tiap Echo Request (ICMP Type 8, Code 0) dibales Echo Reply (ICMP Type 0, Code 0) dengan id dan seq yang sama, TTL request 63 dan reply 64 (beda karena lewat hop yang beda).
 
-Filter yang dipakai:
-
-```
-icmp
-```
-
-**Echo Request** punya `Type: 8, Code: 0`, sedangkan **Echo Reply** punya `Type: 0, Code: 0`.
-
-![](images/echo-request.png)
-![](images/echo-reply.png)
-
-Di paket Echo Reply, ada informasi tambahan `[Response time: 0.123 ms]`, yaitu jarak waktu antara paket Echo Request dikirim dan Echo Reply-nya diterima balik. Ini yang jadi dasar perhitungan RTT.
-
-#### Analisis packet loss dan RTT
-
-Hasil dari ringkasan ping di terminal:
+Hasil statistik:
 
 ![](<images/no-10(2).png>)
 
-```
---- 192.229.2.2 ping statistics ---
-77 packets transmitted, 77 received, 0% packet loss, time 25671ms
-rtt min/avg/max/mdev = 0.409/0.622/1.060/0.128 ms
-```
+Gak ada packet loss (0%), RTT stabil di kisaran 0.4-1.06 ms, artinya koneksi ke server Chisa lancar.
 
-- **Packet loss**: 0%, semua 77 paket yang dikirim berhasil dibalas, ga ada yang hilang
-- **RTT min**: 0.409 ms
-- **RTT avg**: 0.622 ms
-- **RTT max**: 1.060 ms
+#### Output
 
-RTT sendiri adalah waktu round-trip tiap paket, dari saat Echo Request dikirim sampai Echo Reply-nya diterima kembali. Karena dikirim 77 paket, RTT tiap paket dirangkum jadi tiga nilai (min, avg, max) buat ngeliat rentang performanya. Hasilnya stabil di kisaran sub-milidetik, menandakan koneksi Knights ke Chisa lancar tanpa hambatan.
+![](<images/no-10(1).png>)
 
 ---
+
+### Kendala saat mengerjakan
+
+- kesusahan dalam menemukan config yang tepat pada saat nomor 7
+- kurang familiar untuk bagaimana setup gns yang bisa nyambung dengan wireshark terkait
 
 ### Soal 11
 
@@ -596,10 +537,10 @@ Alice mencurigai Knights menjalankan beberapa layanan rahasia di node-nya. Lakuk
 
 Simulasi mengacu pada studi kasus _Serial Experiments Lain_: Alice mencurigai adanya layanan tersembunyi pada node Knights, lalu melakukan pemindaian terhadap tiga port sekaligus: dua port umum (SSH/HTTP) dan satu port rahasia.
 
-| Node    | Peran                | IP          |
-| ------- | -------------------- | ----------- |
-| Knights | Target scan          | 192.229.3.2 |
-| Alice   | Penyerang / pemindai | 192.229.1.2 |
+| Node    | Peran                | IP                     |
+| ------- | -------------------- | ---------------------- |
+| Knights | Target scan          | 192.229.3.2            |
+| Alice   | Penyerang / pemindai | 192.229.1.2            |
 
 #### Konfigurasi Target (Node Knights)
 
@@ -700,79 +641,132 @@ Knights	SSH Server	192.229.3.2
 Mika	SSH Client (user: mika_admin)	192.229.1.3
 ```
 
-#### Konfigurasi SSH Server (Node Knights)
+#### Instalasi dan Konfigurasi SSH Server (Node Knights)
 
-Disimpan sebagai `/root/ssh_setup.sh` agar persisten:
-
-```sh
-#!/bin/sh
+```bash
 apk update
 apk add openssh
-
-adduser -D -s /bin/ash mika_admin
-echo "mika_admin:mikaadmin" | chpasswd
-
 ssh-keygen -A
-mkdir -p /home/mika_admin/.ssh
-chmod 700 /home/mika_admin/.ssh
-chown -R mika_admin:mika_admin /home/mika_admin/.ssh
-
-sed -i '/^#*PubkeyAuthentication /d;/^#*PasswordAuthentication /d;/^#*PermitRootLogin /d' /etc/ssh/sshd_config
-cat >> /etc/ssh/sshd_config <<EOF
-PubkeyAuthentication yes
-PasswordAuthentication yes
-PermitRootLogin no
-EOF
-
-pkill sshd
+passwd root
 /usr/sbin/sshd
 ```
 
-Setelah public key ditempel ke `authorized_keys` milik mika_admin, PasswordAuthentication diubah jadi no:
+Verifikasi service berjalan pada port 22:
 
-```
-sed -i 's/PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-pkill sshd && /usr/sbin/sshd
+```bash
+netstat -tuln | grep 22
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN
+tcp6       0      0 :::22                   :::*                    LISTEN
 ```
 
-Konfigurasi akhir `/etc/ssh/sshd_config`:
+Konfigurasi `/etc/ssh/sshd_config` diatur sebagai berikut untuk mengaktifkan autentikasi berbasis public key:
 
-```
+```conf
+PermitRootLogin yes
 PubkeyAuthentication yes
 PasswordAuthentication no
-PermitRootLogin no
 ```
 
-**Generate Keypair (Node Mika)**
+#### Generate Keypair SSH (Node Mika)
 
-```sh
-apk add openssh-client
-ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
+Instalasi SSH client dan pembuatan user khusus:
+
+```bash
+apk add openssh-client shadow
+useradd -m mika_admin
+passwd mika_admin
+su - mika_admin
 ```
 
-![ssh keygen](images/13-keygen.png)
+Generate RSA keypair 2048-bit:
 
-Public key hasil generate ditempel manual ke '`/home/mika_admin/.ssh/authorized_keys` di Knights.
+```bash
+ssh-keygen -t rsa -b 2048
+```
 
-Mulai capture sebelum menjalankan dibawah ini :
+Hasil:
 
-```ssh mika_admin@192.229.3.4```
+```
+Your identification has been saved in /home/mika_admin/.ssh/id_rsa
+Your public key has been saved in /home/mika_admin/.ssh/id_rsa.pub
+The key fingerprint is:
+SHA256:Iojs0aNTCqtaoHkiC7YDPPKYLFeAeEGLfs/SAkf3liE mika_admin@Mika
+```
 
-Koneksi langsung masuk shell Knights tanpa diminta password sama sekali, membuktikan public key authentication berfungsi.
+#### Distribusi Public Key ke Server
 
-![login](images/13-login.png)
+Isi public key ditampilkan di Mika:
 
-**Analisis Wireshark**
+```bash
+cat ~/.ssh/id_rsa.pub
+```
 
-Display filter:
+Kemudian ditambahkan secara manual ke file `authorized_keys` pada node Knights:
+
+```bash
+mkdir -p /root/.ssh
+nano /root/.ssh/authorized_keys    # paste isi public key
+chmod 700 /root/.ssh
+chmod 600 /root/.ssh/authorized_keys
+```
+
+#### Proses Capture dan Koneksi SSH
+
+![13-0](images/13-wireshark.png)
+
+Capture dimulai pada link antara Switch1–Mika (eth0) sebelum koneksi SSH dijalankan, untuk memastikan seluruh fase handshake tertangkap. Koneksi dilakukan dari user mika_admin di Mika:
+
+```bash
+ssh -v root@192.229.3.2
+```
+
+Koneksi berhasil dan langsung masuk ke shell Knights tanpa diminta password sama sekali, membuktikan autentikasi berbasis public key berfungsi dengan benar.
+
+#### Analisis Wireshark
+
+Display filter yang digunakan:
 
 `tcp.port==22`
 
-![alt text](<images/13-wireshark (2).png>)
+Hasil capture menunjukkan urutan lengkap fase komunikasi SSH sebagai berikut:
 
-#### Mengapa Kredensial Tidak Terlihat Plaintext seperti Telnet
+![13-1](images/13-filter-tcp-port.png)
 
-Private key `Ed25519` milik `mika_admin` yang tersimpan di Mika tidak pernah dikirim melalui jaringan. Server mengirim challenge yang ditandatangani secara digital oleh private key di client, dan hanya hasil signature yang dikirim balik untuk diverifikasi memakai public key di `authorized_keys`. Ini kontras dengan Telnet yang mengirim tiap karakter kredensial (phantom_user/wired_ghost) langsung tanpa enkripsi, terbaca utuh lewat Follow TCP Stream, membuktikan SSH dengan public key authentication jauh lebih aman.
+##### 13.1 Identifikasi Protocol Version Exchange
+
+Paket No. 6 (Server: Protocol) di-expand pada bagian SSH Protocol, menampilkan isi plaintext:
+
+```Protocol: SSH-2.0-OpenSSH_10.2
+[Direction: Server to Client]
+```
+
+![13-2](images/13-plaintext-no-6.png)
+![13-3](images/13-plaintext-ssh.png)
+
+Ini adalah satu-satunya bagian dari sesi SSH yang dikirim dalam bentuk plaintext, karena kedua pihak perlu saling mengetahui versi protokol yang didukung sebelum proses enkripsi dapat dinegosiasikan.
+
+##### 13.2 Identifikasi Key Exchange
+
+Pada paket No. 9, 11 dan 12 terlihat proses negosiasi algoritma kriptografi (Key Exchange Init), dilanjutkan dengan PQ/T Hybrid Key Exchange, sebuah skema Diffie-Hellman modern yang menggabungkan algoritma tradisional dengan algoritma tahan-kuantum (post-quantum) untuk keamanan tambahan terhadap ancaman komputasi kuantum di masa depan.
+
+Setelah paket "New Keys" pada No. 13, seluruh komunikasi berikutnya (termasuk proses autentikasi user) berubah menjadi Encrypted packet yang tidak dapat dibaca isinya sama sekali oleh pihak ketiga.
+
+#### Perbandingan dengan Telnet
+
+| Aspek                 | Telnet                                                      | SSH                                               |
+| --------------------- | ----------------------------------------------------------- | ------------------------------------------------- |
+| Kredensial saat login | Plaintext, terbaca langsung (`phantom_user`, `wired_ghost`) | Tidak pernah dikirim, private key tetap di client |
+| Isi sesi komunikasi   | Seluruhnya plaintext                                        | Terenkripsi setelah Key Exchange                  |
+| Follow TCP Stream     | Menampilkan teks percakapan lengkap                         | Menampilkan data biner/acak (tidak terbaca)       |
+| Bagian yang plaintext | Seluruh sesi                                                | Hanya Protocol Version Exchange                   |
+
+#### Analisis
+
+Kredensial Tidak Terlihat Plaintext seperti Telnet Key Exchange (Diffie-Hellman Hybrid) dilakukan di awal sesi untuk menyepakati session key rahasia antara client dan server, tanpa pernah mengirim kunci privat melalui jaringan, kedua pihak menghitung shared secret yang sama secara independen berdasarkan pertukaran nilai publik.
+Setelah Key Exchange selesai (ditandai paket "New Keys"), seluruh komunikasi berikutnya dienkripsi menggunakan algoritma simetris yang telah disepakati.
+
+Karena autentikasi menggunakan public key, private key milik mika_admin tidak pernah dikirim melalui jaringan sama sekali. Proses yang terjadi adalah server mengirimkan challenge yang harus ditandatangani secara digital oleh private key di sisi client, dan hanya hasil tanda tangan (signature) tersebut yang dikirim balik ke server untuk diverifikasi menggunakan public key yang telah terdaftar di authorized_keys.
+Hal ini kontras total dengan Telnet, yang mengirimkan setiap karakter kredensial secara langsung tanpa perlindungan enkripsi apapun.Pengujian ini membuktikan bahwa SSH dengan autentikasi berbasis public key memberikan tingkat keamanan jauh lebih tinggi dibandingkan Telnet.
 
 ### Soal 14
 
@@ -1216,10 +1210,3 @@ nc 10.4.89.246 3407
 #### Kesimpulan
 
 Meskipun TLS dirancang untuk mengenkripsi seluruh komunikasi HTTP, ketersediaan file keylog (SSLKEYLOGFILE) memungkinkan pihak yang berwenang atau dalam konteks forensik keamanan untuk mendekripsi dan menganalisis isi komunikasi tersebut secara penuh. Hal ini menegaskan bahwa keamanan TLS bergantung sepenuhnya pada kerahasiaan kunci sesi, dan analisis ini membuktikan bahwa struktur data di balik enkripsi TLS pada dasarnya identik dengan HTTP biasa yang dibungkus lapisan kriptografi.
-
-### Kendala saat mengerjakan
-
-- Stuck lama pada saat mengerjakan nomor 7, harus berkali-kali dalam menyesuaikan config, kemudian mengubah akses tiap user sesuai pada soal
-- Kurang familiar untuk bagaimana setup gns yang bisa terintegrasi dengan wireshark terkait
-- GNS Project sempat 409 conflict menyebabkan tidak bisa mengerjakan sebentar, tetapi unutngnya project tidak hilang
-- Sempat bingung saat mengerjakan nomor 13 karena tidak otomatis login ke node Knights seperti yang diminta soal. Human error karena kurang teliti dalam mengaktifkan/nonaktifkan autentikasi password.
