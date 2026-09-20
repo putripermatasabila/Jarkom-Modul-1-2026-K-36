@@ -256,7 +256,7 @@ dns or icmp
 
 ![](images/no-6.jpeg)
 
-## Soal 7
+### Soal 7
 
 Chisa mendirikan FTP Server dengan shared folder `/var/wired/data`. Kebijakan aksesnya, alice dapat read dan write, mika dibatasi read-only, eiri dibatasi tanpa izin akses sama sekali.
 
