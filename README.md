@@ -455,8 +455,8 @@ icmp
 
 **Echo Request** punya `Type: 8, Code: 0`, sedangkan **Echo Reply** punya `Type: 0, Code: 0`.
 
-![](images/echo-request.png>)
-![](images/echo-reply.png>)
+![](images/echo-request.png)
+![](images/echo-reply.png)
 
 Di paket Echo Reply, ada informasi tambahan `[Response time: 0.123 ms]`, yaitu jarak waktu antara paket Echo Request dikirim dan Echo Reply-nya diterima balik. Ini yang jadi dasar perhitungan RTT.
 
@@ -471,8 +471,6 @@ Hasil dari ringkasan ping di terminal:
 77 packets transmitted, 77 received, 0% packet loss, time 25671ms
 rtt min/avg/max/mdev = 0.409/0.622/1.060/0.128 ms
 ```
-
-![](<images/no-10(2).png>)
 
 - **Packet loss**: 0%, semua 77 paket yang dikirim berhasil dibalas, ga ada yang hilang
 - **RTT min**: 0.409 ms
@@ -1278,4 +1276,3 @@ Meskipun TLS dirancang untuk mengenkripsi seluruh komunikasi HTTP, ketersediaan 
 - Kurang familiar untuk bagaimana setup gns yang bisa terintegrasi dengan wireshark terkait
 - GNS Project sempat 409 conflict menyebabkan tidak bisa mengerjakan sebentar, tetapi unutngnya project tidak hilang
 - Sempat bingung saat mengerjakan nomor 13 karena tidak otomatis login ke node Knights seperti yang diminta soal. Human error karena kurang teliti dalam mengaktifkan/nonaktifkan autentikasi password.
-  
